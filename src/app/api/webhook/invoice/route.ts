@@ -1,0 +1,78 @@
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+
+// Seguridad básica: Puedes definir un secreto en tu .env (.env.local)
+// N8N_WEBHOOK_SECRET=mi-secreto-super-seguro
+// Y n8n tendrá que enviarlo en los headers o query params.
+
+export async function POST(request: Request) {
+  try {
+    // 1. Verificar Seguridad (opcional pero recomendado)
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token');
+    
+    // Si quieres usar el secreto:
+    /*
+    if (token !== process.env.N8N_WEBHOOK_SECRET) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+    */
+
+    // 2. Leer el JSON que envía n8n
+    const body = await request.json();
+    
+    // Esperamos un formato similar a este enviado desde n8n
+    const { 
+      fecha, 
+      cliente, 
+      concepto, 
+      importe, 
+      estado = 'Pendiente', 
+      archivo_url, 
+      numero
+    } = body;
+
+    // Validación básica
+    if (!cliente || importe === undefined) {
+      return NextResponse.json(
+        { error: 'Faltan campos obligatorios (cliente, importe)' }, 
+        { status: 400 }
+      );
+    }
+
+    // 3. Insertar en la Base de Datos de Supabase
+    const { data, error } = await supabase
+      .from('facturas')
+      .insert([
+        { 
+          numero: numero || null, 
+          fecha: fecha || new Date().toISOString().split('T')[0], // Si no hay fecha, usa la de hoy
+          cliente, 
+          concepto: concepto || 'Recepción Automática (Web)', 
+          importe: parseFloat(importe), 
+          estado, 
+          archivo_url: archivo_url || null
+        }
+      ])
+      .select();
+
+    if (error) {
+      console.error('Error insertando en Supabase:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // 4. Devolver una respuesta exitosa a n8n
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Factura registrada y guardada exitosamente.',
+      data: data[0]
+    });
+
+  } catch (err: any) {
+    console.error('Error procesando webhook de n8n:', err);
+    return NextResponse.json(
+      { error: 'Error interno procesando webhook', details: err.message }, 
+      { status: 500 }
+    );
+  }
+}
