@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, Hash, Building2, Calendar, ExternalLink, Trash2, ChevronDown, TrendingDown } from 'lucide-react';
+import { Search, Hash, Building2, ExternalLink, Trash2, ChevronDown } from 'lucide-react';
 import { TipoSelect } from '@/components/facturas/TipoSelect';
 import { moverAPapeleraClient } from '@/app/facturas/actions';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { ConfirmDireccionModal } from '@/components/auth/ConfirmDireccionModal';
 
 const fmt = (v: number) => `€ ${v.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
 
@@ -29,6 +31,8 @@ interface Factura {
 
 export function FacturasTable({ data }: { data: Factura[] }) {
   const router = useRouter();
+  const { role } = useAuth();
+  const [confirmModal, setConfirmModal] = useState<{ id: number } | null>(null);
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
   const [filterTipo, setFilterTipo] = useState('');
@@ -177,6 +181,18 @@ export function FacturasTable({ data }: { data: Factura[] }) {
         </div>
       </div>
 
+      {/* Confirm Direccion Modal */}
+      {confirmModal && (
+        <ConfirmDireccionModal
+          actionLabel="mover la factura a la papelera"
+          onConfirmed={async () => {
+            setConfirmModal(null);
+            await moverAPapeleraClient(confirmModal.id);
+          }}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
+
       {/* TABLE */}
       <div className="bg-white dark:bg-[#0a0a0a] rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -238,8 +254,10 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                       ) : (
                         <span className="p-1.5 text-gray-200 dark:text-gray-800 flex items-center"><ExternalLink className="w-4 h-4" /></span>
                       )}
-                      <form action={moverAPapeleraClient.bind(null, inv.id)}>
-                        <button type="submit" onClick={e => e.stopPropagation()} className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center">
+                      <form action={role === 'administracion' ? undefined : moverAPapeleraClient.bind(null, inv.id)}>
+                        <button type={role === 'administracion' ? 'button' : 'submit'}
+                          onClick={e => { e.stopPropagation(); if (role === 'administracion') setConfirmModal({ id: inv.id }); }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </form>
