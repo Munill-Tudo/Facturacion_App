@@ -42,7 +42,8 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
         if (to && d > to) return false;
         return true;
       })();
-      const matchSearch = !q || inv.cliente?.toLowerCase().includes(q) || inv.num_expediente?.toLowerCase().includes(q) || inv.cliente_expediente?.toLowerCase().includes(q);
+      const proveedor = (inv.nombre_proveedor || inv.cliente || '').toLowerCase();
+      const matchSearch = !q || proveedor.includes(q) || inv.num_expediente?.toLowerCase().includes(q) || inv.cliente_expediente?.toLowerCase().includes(q);
       const matchEstado = !filterEstado || inv.estado === filterEstado;
       return matchPeriod && matchSearch && matchEstado;
     });
@@ -174,7 +175,7 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
                       <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
                         <Building2 className="w-3.5 h-3.5 text-indigo-500" />
                       </div>
-                      <span className="font-medium text-gray-900 dark:text-white">{inv.cliente || '—'}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{inv.nombre_proveedor || inv.cliente || '—'}</span>
                     </div>
                   </td>
                   <td className="py-4 px-4"><EditableCell id={inv.id} field="num_expediente" value={inv.num_expediente} placeholder="Añadir exp..." /></td>
@@ -193,8 +194,8 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
                     )}
                   </td>
                   <td className="py-4 px-4 text-right">
-                    {inv.file_url ? (
-                      <a href={inv.file_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex p-2 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10">
+                    {(inv.file_url || inv.archivo_url) ? (
+                      <a href={inv.file_url || inv.archivo_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex p-2 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10">
                         <ExternalLink className="w-4 h-4" />
                       </a>
                     ) : (
