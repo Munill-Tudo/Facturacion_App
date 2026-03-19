@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { Receipt, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -18,22 +17,31 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    const supabase = createSupabaseBrowserClient();
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-    if (authError || !data.user) {
-      setError('Email o contraseña incorrectos.');
+      if (!res.ok) {
+        setError('Email o contraseña incorrectos.');
+        setLoading(false);
+        return;
+      }
+
+      const { user } = await res.json();
+      
+      if (user.role === 'administracion') {
+        router.push('/facturas');
+      } else {
+        router.push('/');
+      }
+      router.refresh();
+    } catch (err) {
+      setError('Error de conexión. Inténtalo de nuevo.');
       setLoading(false);
-      return;
     }
-
-    const role = data.user.user_metadata?.role;
-    if (role === 'administracion') {
-      router.push('/facturas');
-    } else {
-      router.push('/');
-    }
-    router.refresh();
   };
 
   return (
@@ -60,20 +68,20 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-indigo-200 mb-1.5">Email</label>
+              <label className="block text-sm font-medium text-indigo-200 mb-1.5">Email corporativo</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
                 autoFocus
-                placeholder="usuario@mt.es"
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-transparent transition-all"
+                placeholder="usuario@munilltudoabogados.es"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-indigo-200 mb-1.5">Contraseña</label>
+              <label className="block text-sm font-medium text-indigo-200 mb-1.5">Contraseña de acceso</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -81,7 +89,7 @@ export default function LoginPage() {
                   onChange={e => setPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 pr-12 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 pr-12 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 transition-all"
                 />
                 <button
                   type="button"
@@ -110,7 +118,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-white/20 text-xs mt-6">
-          Acceso restringido · Munill-Tudó Abogados
+          Acceso restringido a cuentas autorizadas de Munill-Tudó Abogados.
         </p>
       </div>
     </div>

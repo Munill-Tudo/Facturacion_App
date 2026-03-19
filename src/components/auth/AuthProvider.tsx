@@ -1,11 +1,14 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
-import type { User } from '@supabase/supabase-js';
+
+interface AuthUser {
+  email: string;
+  role: 'direccion' | 'administracion';
+}
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   role: 'direccion' | 'administracion' | null;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -16,29 +19,30 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => listener.subscription.unsubscribe();
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.user) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
+      })
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setUser(null);
     window.location.href = '/login';
   };
 
-  const role = user?.user_metadata?.role as 'direccion' | 'administracion' | null ?? null;
+  const role = user?.role ?? null;
 
   return (
     <AuthContext.Provider value={{ user, role, loading, signOut }}>

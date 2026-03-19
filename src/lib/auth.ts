@@ -1,15 +1,14 @@
-import { createSupabaseServerClient } from './supabase-server'
+import { getSession } from './jwt'
 
 export async function getUser() {
-  const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
+  const session = await getSession()
+  return session
 }
 
 export async function getUserRole(): Promise<'direccion' | 'administracion' | null> {
   const user = await getUser()
   if (!user) return null
-  return (user.user_metadata?.role as 'direccion' | 'administracion') ?? null
+  return user.role
 }
 
 export function isDireccion(role: string | null | undefined) {

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { Loader2, Lock, ShieldAlert, X } from 'lucide-react';
 
 interface Props {
@@ -20,21 +19,25 @@ export function ConfirmDireccionModal({ onConfirmed, onCancel, actionLabel = 'es
     setError('');
     setLoading(true);
 
-    const supabase = createSupabaseBrowserClient();
-    // Verify Direccion credentials
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: process.env.NEXT_PUBLIC_DIRECCION_EMAIL || '',
-      password,
-    });
+    try {
+      const res = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
 
-    if (authError) {
-      setError('Contraseña incorrecta. Acción no autorizada.');
+      if (!res.ok) {
+        setError('Contraseña incorrecta. Acción no autorizada.');
+        setLoading(false);
+        return;
+      }
+
       setLoading(false);
-      return;
+      onConfirmed();
+    } catch (err) {
+      setError('Error verificando la contraseña.');
+      setLoading(false);
     }
-
-    setLoading(false);
-    onConfirmed();
   };
 
   return (
