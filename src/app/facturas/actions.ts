@@ -24,3 +24,11 @@ export async function moverAPapeleraClient(id: number) {
   revalidatePath('/papelera');
 }
 
+export async function bulkUpdateFacturaEstado(ids: number[], estado: string) {
+  if (!ids.length) return;
+  await supabase.from('facturas').update({ estado }).in('id', ids);
+  revalidatePath('/');
+  revalidatePath('/facturas');
+  revalidatePath('/suplidos');
+}
+

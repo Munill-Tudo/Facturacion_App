@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Receipt, LogOut } from 'lucide-react';
+import { NotificationsMenu } from './NotificationsMenu';
 
 export function Header() {
   const { user, role, signOut } = useAuth();
@@ -23,8 +24,10 @@ export function Header() {
       {/* Spacer desktop */}
       <div className="hidden md:flex flex-1" />
 
-      {/* User info + logout */}
+      {/* User info + notifications + logout */}
       <div className="flex items-center gap-3">
+        <NotificationsMenu />
+        
         {user && (
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-2 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-800 rounded-xl px-3 py-1.5">

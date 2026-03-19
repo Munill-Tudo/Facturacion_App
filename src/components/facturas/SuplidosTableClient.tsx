@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, Building2, Calendar, ExternalLink, CheckCircle2, Circle, ChevronDown } from 'lucide-react';
+import { Search, Building2, Calendar, ExternalLink, CheckCircle2, Circle, ChevronDown, CheckSquare } from 'lucide-react';
 import { TipoSelect } from '@/components/facturas/TipoSelect';
 import { EditableCell } from '@/components/facturas/EditableCell';
+import { EstadoSelect } from '@/components/facturas/EstadoSelect';
+import { bulkUpdateFacturaEstado } from '@/app/facturas/actions';
 import { useRouter } from 'next/navigation';
 
 const fmt = (v: number) => `€ ${v.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
@@ -19,6 +21,16 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
   const [selYear, setSelYear] = useState(new Date().getFullYear().toString());
   const [selMonth, setSelMonth] = useState((new Date().getMonth() + 1).toString());
   const [selQ, setSelQ] = useState('1');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isBulking, setIsBulking] = useState(false);
+
+  const handleBulkChange = async (estado: string) => {
+    if (!selectedIds.length) return;
+    setIsBulking(true);
+    await bulkUpdateFacturaEstado(selectedIds, estado);
+    setSelectedIds([]); // clean after bulk
+    setIsBulking(false);
+  };
 
   const years = useMemo(() => {
     const ys = new Set(data.map(i => i.fecha ? new Date(i.fecha).getFullYear().toString() : '').filter(Boolean));
@@ -143,11 +155,38 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
         </div>
       </div>
 
+      {/* BULK ACTIONS BAR */}
+      {selectedIds.length > 0 && (
+        <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-sm font-medium text-emerald-900 dark:text-emerald-300">
+              {selectedIds.length} suplido{selectedIds.length > 1 ? 's' : ''} seleccionado{selectedIds.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-emerald-600/70 dark:text-emerald-400/70 mr-1">Cambiar estado a:</span>
+            <button onClick={() => handleBulkChange('Abonado')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50">
+              Abonado
+            </button>
+            <button onClick={() => handleBulkChange('Pendiente')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50">
+              Pendiente
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-[#0a0a0a] rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-800 text-gray-500 bg-gray-50/50 dark:bg-white/5">
+                <th className="py-4 px-4 w-12">
+                  <input type="checkbox" 
+                    checked={filtered.length > 0 && selectedIds.length === filtered.length}
+                    onChange={e => setSelectedIds(e.target.checked ? filtered.map(f => f.id) : [])}
+                    className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" />
+                </th>
                 <th className="py-4 font-medium px-4">Nº Rec.</th>
                 <th className="py-4 font-medium px-4">Fecha</th>
                 <th className="py-4 font-medium px-4">Proveedor</th>
@@ -165,7 +204,13 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
               )}
               {filtered.map((inv) => (
                 <tr key={inv.id} onDoubleClick={() => router.push(`/facturas/${inv.id}`)}
-                  className="hover:bg-emerald-50/30 dark:hover:bg-emerald-500/5 transition-colors cursor-pointer" title="Doble clic para ver detalle">
+                  className={`hover:bg-emerald-50/30 dark:hover:bg-emerald-500/5 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-emerald-50/40 dark:bg-emerald-500/10' : ''}`} title="Doble clic para ver detalle">
+                  <td className="py-4 px-4" onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" 
+                      checked={selectedIds.includes(inv.id)}
+                      onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" />
+                  </td>
                   <td className="py-4 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">REC-{String(inv.id).padStart(4, '0')}</td>
                   <td className="py-4 px-4 text-gray-500">
                     <div className="flex items-center gap-1.5"><Calendar className="w-3 h-3" />{inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}</div>
@@ -182,16 +227,8 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
                   <td className="py-4 px-4"><EditableCell id={inv.id} field="cliente_expediente" value={inv.cliente_expediente} placeholder="Añadir cliente..." /></td>
                   <td className="py-4 px-4"><TipoSelect id={inv.id} initialTipo={inv.tipo} /></td>
                   <td className="py-4 px-4 font-bold text-gray-900 dark:text-white">{inv.importe != null ? fmt(Number(inv.importe)) : '—'}</td>
-                  <td className="py-4 px-4">
-                    {inv.estado === 'Pagada' ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Pagada
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20">
-                        <Circle className="w-3.5 h-3.5" /> Pendiente
-                      </span>
-                    )}
+                  <td className="py-4 px-4" onClick={e => e.stopPropagation()}>
+                    <EstadoSelect id={inv.id} initialEstado={inv.estado || 'Pendiente'} context="suplido" />
                   </td>
                   <td className="py-4 px-4 text-right">
                     {(inv.file_url || inv.archivo_url) ? (
