@@ -21,9 +21,10 @@ function getQuarter(d: Date): number {
 
 interface Factura {
   id: number; numero?: string; fecha?: string; fecha_pago?: string;
-  cliente?: string; nif_proveedor?: string; poblacion_proveedor?: string;
+  cliente?: string; nombre_proveedor?: string;
+  nif_proveedor?: string; poblacion_proveedor?: string;
   tipo?: string; total_base?: number; total_iva?: number; total_irpf?: number;
-  importe?: number; estado?: string; file_url?: string;
+  importe?: number; estado?: string; file_url?: string; archivo_url?: string;
 }
 
 export function FacturasTable({ data }: { data: Factura[] }) {
@@ -62,7 +63,8 @@ export function FacturasTable({ data }: { data: Factura[] }) {
         return true;
       })();
 
-      const matchSearch = !q || inv.cliente?.toLowerCase().includes(q) || inv.numero?.toLowerCase().includes(q) || inv.nif_proveedor?.toLowerCase().includes(q);
+      const proveedor = (inv.nombre_proveedor || inv.cliente || '').toLowerCase();
+      const matchSearch = !q || proveedor.includes(q) || inv.numero?.toLowerCase().includes(q) || inv.nif_proveedor?.toLowerCase().includes(q);
       const matchEstado = !filterEstado || inv.estado === filterEstado;
       const matchTipo = !filterTipo || inv.tipo === filterTipo;
       return matchPeriod && matchSearch && matchEstado && matchTipo;
@@ -213,7 +215,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                       <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
                         <Building2 className="w-3.5 h-3.5 text-indigo-500" />
                       </div>
-                      <span className="font-medium text-gray-900 dark:text-white">{inv.cliente || '—'}</span>
+                      <span className="font-medium text-gray-900 dark:text-white">{inv.nombre_proveedor || inv.cliente || '—'}</span>
                     </div>
                   </td>
                   <td className="py-3 px-4 font-mono text-gray-500 text-xs">{inv.nif_proveedor || '—'}</td>
@@ -229,8 +231,8 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {inv.file_url ? (
-                        <a href={inv.file_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-500/10 flex items-center">
+                      {(inv.file_url || inv.archivo_url) ? (
+                        <a href={inv.file_url || inv.archivo_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-500/10 flex items-center">
                           <ExternalLink className="w-4 h-4" />
                         </a>
                       ) : (

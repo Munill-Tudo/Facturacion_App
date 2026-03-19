@@ -1,26 +1,35 @@
-"use client";
+'use client';
 
 import { useState } from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { BottomNav } from "./BottomNav";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-[#050505]">
-      <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
-      
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isCollapsed ? 'pl-20' : 'pl-64'}`}>
+      {/* Sidebar: solo visible en desktop (md+) */}
+      <div className="hidden md:block">
+        <Sidebar isCollapsed={isCollapsed} setIsCollapsed={setIsCollapsed} />
+      </div>
+
+      {/* Área de contenido principal */}
+      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
+        {/* Topbar */}
         <Header />
-        
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-8 pb-12 px-6 md:px-12">
-          {/* Al usar w-full en vez de max-w-7xl la tabla se expande, matando el margen gigante */}
-          <div className="w-full">
+
+        {/* Contenido */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pt-4 md:pt-8 pb-20 md:pb-12 px-4 md:px-10">
+          <div className="w-full max-w-full">
             {children}
           </div>
         </main>
       </div>
+
+      {/* Bottom Navigation: solo en móvil */}
+      <BottomNav />
     </div>
   );
 }

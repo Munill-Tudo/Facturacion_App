@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { supabase } from "@/lib/supabase";
 import { CreditCard, CheckCircle2, Circle, AlertCircle, Building2, Calendar, ExternalLink, Search, ChevronDown } from "lucide-react";
 import { TipoSelect } from "@/components/facturas/TipoSelect";

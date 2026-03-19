@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { supabase } from "@/lib/supabase";
 import { FileText } from "lucide-react";
 import { FacturasTable } from "@/components/facturas/FacturasTable";
