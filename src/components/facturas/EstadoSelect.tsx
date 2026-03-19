@@ -41,7 +41,7 @@ export function EstadoSelect({ id, initialEstado, showIcon = true, context = 'fa
         value={estado}
         onChange={handleChange}
         disabled={updating}
-        className={`appearance-none cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium pl-2.5 pr-6 py-1 rounded-full border transition-all hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 ${getColors(estado)} ${updating ? 'opacity-70' : ''}`}
+        className={`appearance-none cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium pl-6 pr-6 py-1 rounded-full border transition-all hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 ${getColors(estado)} ${updating ? 'opacity-70' : ''}`}
       >
         {opciones.map(opt => (
           <option key={opt} value={opt} className="bg-white text-black dark:bg-[#111] dark:text-white">

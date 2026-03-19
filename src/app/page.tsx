@@ -21,10 +21,12 @@ export default function Dashboard() {
   const [rawData, setRawData] = useState<any[]>([]);
 
   // Filters State
-  const [periodMode, setPeriodMode] = useState<'todo' | 'mes' | 'trimestre' | 'año'>('todo');
+  const [periodMode, setPeriodMode] = useState<'todo' | 'libre' | 'mes' | 'trimestre' | 'año'>('todo');
   const [selYear, setSelYear] = useState(new Date().getFullYear().toString());
   const [selMonth, setSelMonth] = useState((new Date().getMonth() + 1).toString());
   const [selQ, setSelQ] = useState(getQuarter(new Date()).toString());
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const fetchData = async () => {
     setLoading(true);
@@ -61,9 +63,16 @@ export default function Dashboard() {
       if (periodMode === 'mes') return d.getFullYear().toString() === selYear && (d.getMonth() + 1).toString() === selMonth;
       if (periodMode === 'trimestre') return d.getFullYear().toString() === selYear && getQuarter(d).toString() === selQ;
       if (periodMode === 'año') return d.getFullYear().toString() === selYear;
+      if (periodMode === 'libre') {
+        const from = dateFrom ? new Date(dateFrom) : null;
+        const to = dateTo ? new Date(dateTo + 'T23:59:59') : null;
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+        return true;
+      }
       return true; // 'todo'
     });
-  }, [rawData, periodMode, selYear, selMonth, selQ]);
+  }, [rawData, periodMode, selYear, selMonth, selQ, dateFrom, dateTo]);
 
   const metrics = useMemo(() => {
     let gTotales = 0, gPendientes = 0, ivaT = 0, fPendientesCount = 0;
@@ -142,7 +151,7 @@ export default function Dashboard() {
         
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           <div className="flex flex-wrap gap-2 items-center bg-gray-50 dark:bg-black/50 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-800">
-            {(['todo','mes','trimestre','año'] as const).map(m => (
+            {(['todo','libre','mes','trimestre','año'] as const).map(m => (
               <button key={m} onClick={() => setPeriodMode(m)}
                 className={`px-4 py-1.5 text-sm rounded-xl font-medium transition-all ${periodMode === m ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
                 {m.charAt(0).toUpperCase() + m.slice(1)}
@@ -151,6 +160,19 @@ export default function Dashboard() {
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
+            {periodMode === 'libre' && (
+              <>
+                <div className="flex items-center gap-2 text-sm bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 shadow-sm">
+                  <span className="text-gray-500 text-xs">Desde:</span>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-transparent text-gray-700 dark:text-gray-200 focus:outline-none appearance-none font-medium w-full" />
+                </div>
+                <div className="flex items-center gap-2 text-sm bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 shadow-sm">
+                  <span className="text-gray-500 text-xs">Hasta:</span>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-transparent text-gray-700 dark:text-gray-200 focus:outline-none appearance-none font-medium w-full" />
+                </div>
+              </>
+            )}
+            
             {(periodMode === 'mes' || periodMode === 'trimestre' || periodMode === 'año') && (
               <div className="relative">
                 <select value={selYear} onChange={e => setSelYear(e.target.value)} className="pl-4 pr-10 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-[#111] text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none font-medium shadow-sm">
