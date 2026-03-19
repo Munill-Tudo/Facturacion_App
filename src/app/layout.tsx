@@ -17,9 +17,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="antialiased">
+    <html lang="es" className="antialiased" suppressHydrationWarning>
       <body
         className={`${inter.variable} font-sans bg-gray-50 dark:bg-[#050505] text-gray-900 dark:text-gray-100 min-h-screen selection:bg-indigo-500/30`}
+        suppressHydrationWarning
       >
         <AuthProvider>
           <AppLayout>{children}</AppLayout>
