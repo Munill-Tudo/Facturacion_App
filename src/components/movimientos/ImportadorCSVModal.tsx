@@ -160,10 +160,15 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
     setIsSubmitting(true);
     setError(null);
     try {
-      const { inserted, duplicates } = await bulkInsertMovimientos(preview);
-      onComplete(`Excel importado con éxito: ${inserted} nuevos, ${duplicates} ignorados por duplicidad.`);
+      const result = await bulkInsertMovimientos(preview);
+      if (result.error) {
+        setError(result.error);
+        setIsSubmitting(false);
+        return;
+      }
+      onComplete(`Excel importado con éxito: ${result.inserted} nuevos, ${result.duplicates} ignorados por duplicidad.`);
     } catch (e: any) {
-      setError(e.message || "Error al subir a la base de datos.");
+      setError(e.message || "Error inesperado al subir a la base de datos.");
       setIsSubmitting(false);
     }
   };

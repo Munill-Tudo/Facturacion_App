@@ -20,7 +20,7 @@ export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
 
   if (error) {
     console.error("Error validando duplicados:", error);
-    throw new Error("No se constató duplicidad. Cancelado por seguridad.");
+    return { error: "No se pudo validar duplicados en la base de datos." };
   }
 
   const existingSet = new Set(
@@ -35,7 +35,9 @@ export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
     if (existingSet.has(key)) {
       duplicates++;
     } else {
-      paraInsertar.push(mov);
+      // Eliminar campos de UI antes de insertar en BD
+      const { _idUnico, ...dbMov } = mov;
+      paraInsertar.push(dbMov);
       // lo agregamos al set por si hay duplicados dentro del mismo excel
       existingSet.add(key);
     }
@@ -47,8 +49,8 @@ export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
       .insert(paraInsertar);
 
     if (insertErr) {
-      console.error(insertErr);
-      throw new Error("Error guardando movimientos: " + insertErr.message);
+      console.error("Error Insertando:", insertErr);
+      return { error: `Error guardando movimientos: ${insertErr.message || JSON.stringify(insertErr)}` };
     }
   }
 
