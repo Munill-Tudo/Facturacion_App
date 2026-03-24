@@ -278,6 +278,20 @@ export function ModalEditarProveedor({
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none" />
                 </div>
               </div>
+
+              <h3 className="md:col-span-2 text-sm font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-800 pb-2 mt-2">Configuración Contable</h3>
+
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Factura por Defecto</label>
+                <select value={formData.tipo_defecto || ''} onChange={e => setFormData({ ...formData, tipo_defecto: e.target.value })} 
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-black border border-gray-200 dark:border-gray-800 rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none cursor-pointer">
+                  <option value="">(Sin asignar - se clasificará manualmente)</option>
+                  <option value="Fijo">Fijo</option>
+                  <option value="Variable">Variable</option>
+                  <option value="Suplido">Suplido</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Las nuevas facturas que lleguen de este proveedor se marcarán automáticamente con este tipo.</p>
+              </div>
             </div>
               </form>
             </div>

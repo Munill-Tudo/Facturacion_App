@@ -52,9 +52,10 @@ export async function POST(request: Request) {
     }
 
     // Novedad: Interconexión con la Base de Maestros Proveedores
+    let tipoAsignado = null;
     if (nifReal) {
-      // Intentar auto-crear un proveedor en la sombra
-      await buscarOCrearProveedorPorNIF({
+      // Intentar auto-crear o recuperar un proveedor en la sombra
+      const prov = await buscarOCrearProveedorPorNIF({
         nif: nifReal.toUpperCase(),
         nombre: nombreReal,
         direccion: domicilio || null,
@@ -62,6 +63,9 @@ export async function POST(request: Request) {
         poblacion: poblacion || null,
         provincia: provincia || null
       });
+      if (prov && prov.tipo_defecto) {
+        tipoAsignado = prov.tipo_defecto;
+      }
     }
 
     // 3. Insertar en la Base de Datos de Supabase
@@ -79,6 +83,7 @@ export async function POST(request: Request) {
           concepto: concepto || 'Recepción Automática (Web)', 
           importe: parseFloat(importe), 
           estado, 
+          tipo: tipoAsignado || null, // Novedad: Autoclasificación según maestro de proveedores
           archivo_url: archivo_url || null
         }
       ])

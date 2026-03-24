@@ -14,6 +14,7 @@ export type Proveedor = {
   email: string | null;
   telefono: string | null;
   iban: string | null;
+  tipo_defecto?: string | null;
   created_at?: string;
 };
 
@@ -91,7 +92,8 @@ export async function buscarOCrearProveedorPorNIF(payload: Partial<Proveedor>) {
       provincia: payload.provincia || null,
       email: payload.email || null,
       telefono: payload.telefono || null,
-      iban: payload.iban || null
+      iban: payload.iban || null,
+      tipo_defecto: payload.tipo_defecto || null
     }])
     .select()
     .single();
