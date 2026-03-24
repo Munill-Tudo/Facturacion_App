@@ -89,10 +89,13 @@ export default function MovimientosPage() {
             <thead className="bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-gray-800 text-gray-500">
               <tr>
                 <th className="px-6 py-4 font-semibold shrink-0 w-16">Tipo</th>
-                <th className="px-6 py-4 font-semibold whitespace-nowrap">Fecha</th>
-                <th className="px-6 py-4 font-semibold">Concepto</th>
+                <th className="px-6 py-4 font-semibold whitespace-nowrap">Fechas</th>
+                <th className="px-6 py-4 font-semibold">Cód.</th>
+                <th className="px-6 py-4 font-semibold">Concepto / Beneficiario</th>
+                <th className="px-6 py-4 font-semibold">Observaciones / Detalles</th>
                 <th className="px-6 py-4 font-semibold">Estado</th>
                 <th className="px-6 py-4 font-semibold text-right">Importe</th>
+                <th className="px-6 py-4 font-semibold text-right">Saldo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800/60">
@@ -114,12 +117,21 @@ export default function MovimientosPage() {
                         {mov.tipo === 'Cobro' ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400 font-medium">
-                      {new Date(mov.fecha).toLocaleDateString('es-ES')}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-gray-900 dark:text-white font-medium text-sm">{new Date(mov.fecha).toLocaleDateString('es-ES')}</span>
+                        {mov.f_valor && <span className="text-xs text-gray-400">Val: {new Date(mov.f_valor).toLocaleDateString('es-ES')}</span>}
+                      </div>
                     </td>
+                    <td className="px-6 py-4 text-gray-500 dark:text-gray-400 font-mono text-xs">{mov.codigo || '-'}</td>
                     <td className="px-6 py-4">
                       <p className="font-medium text-gray-900 dark:text-white line-clamp-1">{mov.concepto}</p>
-                      {mov.banco && <p className="text-xs text-gray-400 uppercase tracking-widest mt-0.5">{mov.banco}</p>}
+                      {mov.beneficiario && <p className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-1">{mov.beneficiario}</p>}
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 min-w-[150px]">{mov.observaciones || '-'}</p>
+                      {mov.remesa && <p className="text-[10px] text-gray-400 mt-1 uppercase font-semibold">Remesa: {mov.remesa}</p>}
+                      {mov.oficina && <p className="text-[10px] text-gray-400 mt-0.5 uppercase">Sucursal: {mov.oficina}</p>}
                     </td>
                     <td className="px-6 py-4">
                       {mov.estado_conciliacion === 'Conciliado' ? (
@@ -134,9 +146,12 @@ export default function MovimientosPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <p className={`font-bold text-base ${mov.tipo === 'Cobro' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                      <p className={`font-bold text-base whitespace-nowrap ${mov.tipo === 'Cobro' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
                         {mov.tipo === 'Cobro' ? '+' : ''}{fmt(Number(mov.importe))}
                       </p>
+                    </td>
+                    <td className="px-6 py-4 text-right text-gray-500 font-mono text-sm whitespace-nowrap">
+                      {mov.saldo ? `${fmt(Number(mov.saldo))}` : '-'}
                     </td>
                   </tr>
                 ))

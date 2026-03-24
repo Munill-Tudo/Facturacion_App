@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { X, UploadCloud, AlertCircle, FileSpreadsheet, Check } from 'lucide-react';
 import { bulkInsertMovimientos } from '@/app/movimientos/actions';
+import * as XLSX from 'xlsx';
 
 export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg: string) => void, onCancel: () => void }) {
   const [file, setFile] = useState<File | null>(null);
@@ -9,96 +10,121 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const parseCSV = async (f: File) => {
+  const parseFile = async (f: File) => {
     try {
-      const text = await f.text();
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
-      
-      // Intentar detectar delimitador (, o ;)
-      const firstLine = lines[0] || '';
-      const delimiter = (firstLine.match(/;/g)?.length || 0) > (firstLine.match(/,/g)?.length || 0) ? ';' : ',';
+      const data = await f.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-      // Encontrar fila de cabeceras (contiene Fecha, Concepto o Importe)
       let headerIdx = -1;
-      for (let i = 0; i < Math.min(20, lines.length); i++) {
-        const l = lines[i].toLowerCase();
-        if (l.includes('fecha') && (l.includes('concepto') || l.includes('importe') || l.includes('movimiento'))) {
+      for (let i = 0; i < Math.min(30, json.length); i++) {
+        const rowStr = (json[i] || []).map(c => String(c).toLowerCase()).join(' ');
+        if (rowStr.includes('concepto') && rowStr.includes('importe') && (rowStr.includes('f. contable') || rowStr.includes('fecha'))) {
           headerIdx = i;
           break;
         }
       }
 
       if (headerIdx === -1) {
-        throw new Error("No se encontraron las columnas 'Fecha', 'Concepto' e 'Importe' en el archivo.");
+        throw new Error("No se encontraron las columnas 'CONCEPTO' e 'IMPORTE' en el archivo Excel/CSV.");
       }
 
-      const headers = lines[headerIdx].split(delimiter).map(h => h.replace(/["']/g, '').trim().toLowerCase());
-      const colFecha = headers.findIndex(h => h.includes('fecha') && !h.includes('valor'));
-      const colConcepto = headers.findIndex(h => h.includes('concepto'));
-      const colImporte = headers.findIndex(h => h.includes('importe') || h.includes('movimiento'));
+      const headers = (json[headerIdx] || []).map((h: any) => String(h || '').trim().toLowerCase());
+      const colFechas = ["f. contable", "fecha"];
+      const colFecha = headers.findIndex(h => colFechas.includes(h));
+      const colConcepto = headers.findIndex(h => h === "concepto");
+      const colBenef = headers.findIndex(h => h.includes("beneficiario") || h.includes("ordenante"));
+      const colObs = headers.findIndex(h => h.includes("observaciones") || h === "observación");
+      const colImporte = headers.findIndex(h => h === "importe" || h === "movimiento");
+      
+      const colFValor = headers.findIndex(h => h === "f. valor" || h === "fecha valor");
+      const colCodigo = headers.findIndex(h => h === "código" || h === "codigo");
+      const colSaldo = headers.findIndex(h => h === "saldo");
+      const colDivisa = headers.findIndex(h => h === "divisa");
+      const colOficina = headers.findIndex(h => h === "oficina");
+      const colRemesa = headers.findIndex(h => h === "remesa");
 
       if (colFecha === -1 || colConcepto === -1 || colImporte === -1) {
-        throw new Error("Faltan columnas requeridas. Necesito Fecha, Concepto e Importe/Movimiento.");
+        throw new Error("Faltan columnas requeridas (F. Contable, Concepto e Importe) en el archivo del BBVA.");
       }
 
+      const parseFecha = (val: any) => {
+        if (!val) return null;
+        if (typeof val === 'number' && val > 25000) {
+          const jsDate = new Date(Math.round((val - 25569) * 86400 * 1000));
+          return jsDate.toISOString().split('T')[0];
+        }
+        let s = String(val).trim();
+        let fDb = s;
+        if (s.includes('/')) {
+          const p = s.split('/');
+          if (p.length >= 3) {
+            if (p[2].length === 4) fDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+            else if (p[0].length === 4) fDb = `${p[0]}-${p[1].padStart(2, '0')}-${p[2].padStart(2, '0')}`;
+          }
+        } else if (s.includes('-')) {
+           const p = s.split('-');
+           if (p.length >= 3 && p[2].length === 4) fDb = `${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fDb)) {
+           const d = new Date(s);
+           if (!isNaN(d.getTime())) fDb = d.toISOString().split('T')[0];
+        }
+        return fDb;
+      };
+
+      const parseMoneda = (val: any) => {
+        if (typeof val === 'number') return val;
+        let s = String(val).replace(/[^\d.,-]/g, '');
+        if (s.includes(',') && s.indexOf('.') < s.indexOf(',')) s = s.replace(/\./g, '').replace(',', '.');
+        else if (s.includes(',')) s = s.replace(',', '.');
+        const num = parseFloat(s);
+        return isNaN(num) ? null : num;
+      };
+
       const rawData = [];
-      // Parsear datos
-      for (let i = headerIdx + 1; i < lines.length; i++) {
-        // Ignorar líneas vacías o extrañas
-        if (!lines[i] || lines[i].split(delimiter).length < 3) continue;
+      for (let i = headerIdx + 1; i < json.length; i++) {
+        const row = json[i];
+        if (!row || row.length < 3) continue;
+
+        const fDateVal = row[colFecha];
+        const fImporteVal = row[colImporte];
+        if (!fDateVal || !fImporteVal) continue;
+
+        const importeNumber = parseMoneda(fImporteVal);
+        if (importeNumber === null) continue;
+
+        const baseConcepto = row[colConcepto] ? String(row[colConcepto]).trim() : '';
+        const benef = colBenef !== -1 && row[colBenef] ? String(row[colBenef]).trim() : '';
+        const obs = colObs !== -1 && row[colObs] ? String(row[colObs]).trim() : '';
+        const codigo = colCodigo !== -1 && row[colCodigo] ? String(row[colCodigo]).trim() : '';
+        const divisa = colDivisa !== -1 && row[colDivisa] ? String(row[colDivisa]).trim() : '';
+        const oficina = colOficina !== -1 && row[colOficina] ? String(row[colOficina]).trim() : '';
+        const remesa = colRemesa !== -1 && row[colRemesa] ? String(row[colRemesa]).trim() : '';
         
-        // Regex para hacer split respetando comillas
-        const row = lines[i].split(new RegExp(`\\s*${delimiter}\\s*(?=(?:(?:[^"]*"){2})*[^"]*$)`))
-                            .map(c => c.replace(/^"|"$/g, '').trim());
-                            
-        const fDateStr = row[colFecha];
-        const fConcepto = row[colConcepto];
-        let fImporteStr = row[colImporte];
+        let saldoNumber = null;
+        if (colSaldo !== -1 && row[colSaldo]) saldoNumber = parseMoneda(row[colSaldo]);
 
-        if (!fDateStr || !fConcepto || !fImporteStr) continue;
-
-        // Limpiar importe español: "1.234,56" -> 1234.56
-        fImporteStr = fImporteStr.replace(/[^\d.,-]/g, ''); // quitar euros o espacios
-        if (fImporteStr.includes(',') && fImporteStr.indexOf('.') < fImporteStr.indexOf(',')) {
-          // caso 1.000,50 -> quitar puntos y cambiar coma por punto
-          fImporteStr = fImporteStr.replace(/\./g, '').replace(',', '.');
-        } else if (fImporteStr.includes(',')) {
-          fImporteStr = fImporteStr.replace(',', '.');
-        }
-        const importeNumber = parseFloat(fImporteStr);
-        if (isNaN(importeNumber)) continue;
-
-        // Parsear fecha DD/MM/YYYY a YYYY-MM-DD
-        let fechaDb = fDateStr;
-        if (fDateStr.includes('/')) {
-          const parts = fDateStr.split('/');
-          if (parts.length === 3) {
-            // DD/MM/YYYY
-            if (parts[2].length === 4) fechaDb = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            // YYYY/MM/DD
-            else if (parts[0].length === 4) fechaDb = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-          }
-        } else if (fDateStr.includes('-')) {
-          const parts = fDateStr.split('-');
-          if (parts[2].length === 4) fechaDb = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        }
-
-        // Si fechaDb no es válida (ej YYYY-MM-DD), intentar parse
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaDb)) {
-          const dObj = new Date(fDateStr);
-          if (!isNaN(dObj.getTime())) {
-            fechaDb = dObj.toISOString().split('T')[0];
-          }
-        }
+        const fechaDb = parseFecha(fDateVal) || String(fDateVal);
+        const fValorDb = colFValor !== -1 ? parseFecha(row[colFValor]) : null;
 
         rawData.push({
           banco: 'BBVA',
           fecha: fechaDb,
-          concepto: fConcepto,
+          f_valor: fValorDb || null,
+          codigo: codigo || null,
+          concepto: baseConcepto || "Movimiento Bancario",
+          beneficiario: benef || null,
+          observaciones: obs || null,
           importe: importeNumber,
+          saldo: saldoNumber,
+          divisa: divisa || null,
+          oficina: oficina || null,
+          remesa: remesa || null,
           tipo: importeNumber >= 0 ? 'Cobro' : 'Pago',
           estado_conciliacion: 'Pendiente',
-          // para la visualizacion
           _idUnico: i
         });
       }
@@ -118,12 +144,12 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
   const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
-    if (f) parseCSV(f);
+    if (f) parseFile(f);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) parseCSV(f);
+    if (f) parseFile(f);
   };
 
   const handleUpload = async () => {
@@ -145,7 +171,7 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
         <div className="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-white/5">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5 text-indigo-500" /> 
-            Importador de Banco (CSV)
+            Subir Excel (BBVA)
           </h2>
           <button onClick={onCancel} disabled={isSubmitting} className="p-2 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors">
             <X className="w-5 h-5" />
@@ -164,8 +190,8 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
                 <UploadCloud className="w-8 h-8" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Sube tu Excel o CSV</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">Arrastra el documento descargado del BBVA aquí o haz clic para seleccionarlo de tu ordenador. Formatos soportados: .csv</p>
-              <input type="file" accept=".csv,.txt" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">Arrastra el Excel que descargas del BBVA aquí o haz clic para seleccionarlo. Formatos soportados: .xlsx, .xls, .csv</p>
+              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
             </div>
           )}
 
@@ -191,22 +217,31 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
                 </span>
               </div>
               <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-left text-xs whitespace-nowrap hidden sm:table">
                   <thead className="bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-gray-800">
                     <tr>
                       <th className="px-4 py-2 font-medium text-gray-500">Fecha</th>
+                      <th className="px-4 py-2 font-medium text-gray-500">Cód.</th>
                       <th className="px-4 py-2 font-medium text-gray-500">Concepto</th>
+                      <th className="px-4 py-2 font-medium text-gray-500">Beneficiario / Obs.</th>
                       <th className="px-4 py-2 font-medium text-gray-500 text-right">Importe</th>
+                      <th className="px-4 py-2 font-medium text-gray-500 text-right">Saldo</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-black">
                     {preview.slice(0, 5).map(m => (
                       <tr key={m._idUnico}>
                         <td className="px-4 py-2 text-gray-600 dark:text-gray-400">{m.fecha}</td>
-                        <td className="px-4 py-2 text-gray-900 dark:text-white truncate max-w-[250px]">{m.concepto}</td>
+                        <td className="px-4 py-2 text-gray-500 dark:text-gray-500">{m.codigo || '-'}</td>
+                        <td className="px-4 py-2 text-gray-900 dark:text-white truncate max-w-[150px]">{m.concepto}</td>
+                        <td className="px-4 py-2 text-gray-500 truncate max-w-[200px]">
+                          {m.beneficiario ? <span className="mr-2 font-semibold">{m.beneficiario}</span> : null}
+                          {m.observaciones || '-'}
+                        </td>
                         <td className={`px-4 py-2 text-right font-medium ${m.importe > 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
                           {m.importe > 0 ? '+' : ''}{m.importe}€
                         </td>
+                        <td className="px-4 py-2 text-right text-gray-400 font-mono text-xs">{m.saldo ? `${m.saldo}€` : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
