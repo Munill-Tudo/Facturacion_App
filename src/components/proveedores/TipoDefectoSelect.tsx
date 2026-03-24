@@ -1,17 +1,23 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { changeTipoDefectoProveedor } from '@/app/proveedores/actions';
 
 export function TipoDefectoSelect({ id, initialTipo }: { id: string, initialTipo?: string | null }) {
   const [isPending, startTransition] = useTransition();
-  const currentVal = initialTipo || '';
+  const [currentVal, setCurrentVal] = useState(initialTipo || '');
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setCurrentVal(val); // Optimistic UI update
+    startTransition(() => changeTipoDefectoProveedor(id, val));
+  };
 
   return (
     <div onClick={e => e.stopPropagation()}>
       <select 
         value={currentVal} 
-        onChange={(e) => startTransition(() => changeTipoDefectoProveedor(id, e.target.value))}
+        onChange={handleChange}
         disabled={isPending}
         className={`text-[10px] md:text-xs font-semibold px-2 py-1 rounded-full border outline-none cursor-pointer appearance-none transition-all hover:scale-105 ${
           isPending ? 'opacity-50' : ''
