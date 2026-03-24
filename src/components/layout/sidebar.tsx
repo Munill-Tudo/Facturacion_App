@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, Settings, CreditCard, PiggyBank, ArrowRightLeft, Receipt, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean, setIsCollapsed: (val: boolean) => void }) {
@@ -41,6 +41,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
         )}
         <NavItem href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Facturas" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
         <NavItem href="/suplidos" icon={<CreditCard className="w-5 h-5 shrink-0" />} label="Suplidos" isCollapsed={isCollapsed} active={pathname === '/suplidos'} />
+        <NavItem href="/proveedores" icon={<Settings className="w-5 h-5 shrink-0" />} label="Proveedores" isCollapsed={isCollapsed} active={pathname === '/proveedores'} />
         <NavItem href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
         <NavItem href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
         <NavItem href="/papelera" icon={<Trash2 className="w-5 h-5 shrink-0" />} label="Papelera" isCollapsed={isCollapsed} active={pathname === '/papelera'}

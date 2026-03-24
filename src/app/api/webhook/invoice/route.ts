@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { buscarOCrearProveedorPorNIF } from '@/app/proveedores/actions';
 
 // Seguridad básica: Puedes definir un secreto en tu .env (.env.local)
 // N8N_WEBHOOK_SECRET=mi-secreto-super-seguro
@@ -29,15 +30,38 @@ export async function POST(request: Request) {
       importe, 
       estado = 'Pendiente', 
       archivo_url, 
-      numero
+      numero,
+      nif,
+      emisor_nif,
+      domicilio,
+      cp,
+      poblacion,
+      provincia,
+      emisor_nombre
     } = body;
 
+    const nombreReal = emisor_nombre || cliente;
+    const nifReal = emisor_nif || nif;
+
     // Validación básica
-    if (!cliente || importe === undefined) {
+    if (!nombreReal || importe === undefined) {
       return NextResponse.json(
-        { error: 'Faltan campos obligatorios (cliente, importe)' }, 
+        { error: 'Faltan campos obligatorios (cliente/emisor_nombre, importe)' }, 
         { status: 400 }
       );
+    }
+
+    // Novedad: Interconexión con la Base de Maestros Proveedores
+    if (nifReal) {
+      // Intentar auto-crear un proveedor en la sombra
+      await buscarOCrearProveedorPorNIF({
+        nif: nifReal.toUpperCase(),
+        nombre: nombreReal,
+        direccion: domicilio || null,
+        cp: cp || null,
+        poblacion: poblacion || null,
+        provincia: provincia || null
+      });
     }
 
     // 3. Insertar en la Base de Datos de Supabase
@@ -47,7 +71,13 @@ export async function POST(request: Request) {
         { 
           numero: numero || null, 
           fecha: fecha || new Date().toISOString().split('T')[0], // Si no hay fecha, usa la de hoy
-          cliente, 
+          cliente: nombreReal,
+          emisor_nombre: nombreReal,
+          emisor_nif: nifReal || null,
+          emisor_domicilio: domicilio || null,
+          emisor_cp: cp || null,
+          emisor_poblacion: poblacion || null,
+          emisor_provincia: provincia || null,
           concepto: concepto || 'Recepción Automática (Web)', 
           importe: parseFloat(importe), 
           estado, 

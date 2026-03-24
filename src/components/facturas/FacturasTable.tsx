@@ -8,6 +8,7 @@ import { moverAPapeleraClient, bulkUpdateFacturaEstado } from '@/app/facturas/ac
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ConfirmDireccionModal } from '@/components/auth/ConfirmDireccionModal';
+import { ModalEditarFactura } from '@/components/facturas/ModalEditarFactura';
 
 const fmt = (v: number) => `€ ${v.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
 
@@ -45,6 +46,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
   const [selQ, setSelQ] = useState('1');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBulking, setIsBulking] = useState(false);
+  const [editingFactura, setEditingFactura] = useState<any>(null);
 
   const handleBulkChange = async (estado: string) => {
     if (!selectedIds.length) return;
@@ -255,8 +257,8 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                 <tr><td colSpan={11} className="py-12 text-center text-gray-500">No se encontraron facturas con esos filtros.</td></tr>
               )}
               {filtered.map((inv) => (
-                <tr key={inv.id} onDoubleClick={() => router.push(`/facturas/${inv.id}`)}
-                  className={`hover:bg-indigo-50/30 dark:hover:bg-indigo-500/5 transition-colors group cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-indigo-50/40 dark:bg-indigo-500/10' : ''}`} title="Doble clic para ver detalle">
+                <tr key={inv.id} onDoubleClick={() => setEditingFactura(inv)}
+                  className={`hover:bg-indigo-50/30 dark:hover:bg-indigo-500/5 transition-colors group cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-indigo-50/40 dark:bg-indigo-500/10' : ''}`} title="Doble clic para editar factura">
                   <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
                     <input type="checkbox" 
                       checked={selectedIds.includes(inv.id)}
@@ -310,6 +312,17 @@ export function FacturasTable({ data }: { data: Factura[] }) {
           </table>
         </div>
       </div>
+
+      {editingFactura && (
+        <ModalEditarFactura
+          factura={editingFactura}
+          onClose={() => setEditingFactura(null)}
+          onSave={() => {
+            setEditingFactura(null);
+            router.refresh(); // Refresh page data from server component
+          }}
+        />
+      )}
     </div>
   );
 }
