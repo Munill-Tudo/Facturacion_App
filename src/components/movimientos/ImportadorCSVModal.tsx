@@ -19,8 +19,10 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
       const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
       let headerIdx = -1;
-      for (let i = 0; i < Math.min(30, json.length); i++) {
-        const rowStr = (json[i] || []).map(c => String(c).toLowerCase()).join(' ');
+      for (let i = 0; i < Math.min(50, json.length); i++) {
+        const rowArr = json[i] || [];
+        // Array.from is used to avoid holes (empty slots) in arrays which cause mapping to retain undefined
+        const rowStr = Array.from(rowArr).map(c => c ? String(c).toLowerCase() : '').join(' ');
         if (rowStr.includes('concepto') && rowStr.includes('importe') && (rowStr.includes('f. contable') || rowStr.includes('fecha'))) {
           headerIdx = i;
           break;
@@ -31,7 +33,8 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
         throw new Error("No se encontraron las columnas 'CONCEPTO' e 'IMPORTE' en el archivo Excel/CSV.");
       }
 
-      const headers = (json[headerIdx] || []).map((h: any) => String(h || '').trim().toLowerCase());
+      const headersRaw = json[headerIdx] || [];
+      const headers = Array.from(headersRaw).map((h: any) => h ? String(h).trim().toLowerCase() : '');
       const colFechas = ["f. contable", "fecha"];
       const colFecha = headers.findIndex(h => colFechas.includes(h));
       const colConcepto = headers.findIndex(h => h === "concepto");
