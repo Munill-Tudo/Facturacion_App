@@ -28,12 +28,11 @@ export function ModalEditarFactura({
   const handleSelectProveedor = (p: Proveedor) => {
     setFormData((prev: any) => ({
       ...prev,
-      emisor_nombre: p.nombre,
-      emisor_nif: p.nif,
-      emisor_domicilio: p.direccion || prev.emisor_domicilio,
-      emisor_cp: p.cp || prev.emisor_cp,
-      emisor_poblacion: p.poblacion || prev.emisor_poblacion,
-      emisor_provincia: p.provincia || prev.emisor_provincia
+      nombre_proveedor: p.nombre,
+      nif_proveedor: p.nif,
+      direccion_proveedor: p.direccion || prev.direccion_proveedor,
+      poblacion_proveedor: p.poblacion || prev.poblacion_proveedor,
+      // Se guardaban CP y Provincia si existieran en la DB Facturas, por ahora la base no parece tener cp_proveedor
     }));
     setSearchProv(p.nombre);
     setShowProvDropdown(false);
@@ -105,7 +104,7 @@ export function ModalEditarFactura({
                     onFocus={() => setShowProvDropdown(true)}
                     className="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-black border border-indigo-200 dark:border-indigo-500/50 rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all placeholder-gray-400" 
                   />
-                  {formData.emisor_nombre && (
+                  {formData.nombre_proveedor && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-500/20 px-2 py-1 rounded-md">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Vinculado
                     </div>
@@ -143,33 +142,26 @@ export function ModalEditarFactura({
                 
                 <div className="space-y-1 mt-3">
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Razón Social</label>
-                  <input required value={formData.emisor_nombre || ''} onChange={e => setFormData({ ...formData, emisor_nombre: e.target.value })} 
+                  <input required value={formData.nombre_proveedor || formData.cliente || ''} onChange={e => setFormData({ ...formData, nombre_proveedor: e.target.value })} 
                     className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none" />
                 </div>
                 
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">NIF/CIF</label>
-                  <input required value={formData.emisor_nif || ''} onChange={e => setFormData({ ...formData, emisor_nif: e.target.value.toUpperCase() })} 
+                  <input required value={formData.nif_proveedor || ''} onChange={e => setFormData({ ...formData, nif_proveedor: e.target.value.toUpperCase() })} 
                     className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none font-mono" />
                 </div>
                 
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Domicilio Completo</label>
-                  <input value={formData.emisor_domicilio || ''} onChange={e => setFormData({ ...formData, emisor_domicilio: e.target.value })} 
+                  <input value={formData.direccion_proveedor || ''} onChange={e => setFormData({ ...formData, direccion_proveedor: e.target.value })} 
                     className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none" />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">C.P.</label>
-                    <input value={formData.emisor_cp || ''} onChange={e => setFormData({ ...formData, emisor_cp: e.target.value })} 
-                      className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none" />
-                  </div>
-                  <div className="space-y-1 col-span-2">
-                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Población</label>
-                    <input value={formData.emisor_poblacion || ''} onChange={e => setFormData({ ...formData, emisor_poblacion: e.target.value })} 
-                      className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none" />
-                  </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Población</label>
+                  <input value={formData.poblacion_proveedor || ''} onChange={e => setFormData({ ...formData, poblacion_proveedor: e.target.value })} 
+                    className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none" />
                 </div>
               </div>
 
@@ -192,22 +184,22 @@ export function ModalEditarFactura({
                 <div className="grid grid-cols-2 gap-3 bg-gray-100/50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-gray-800 mt-4">
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">B. Imponible (€)</label>
-                    <input type="number" step="0.01" value={formData.base_imponible || ''} onChange={e => setFormData({ ...formData, base_imponible: parseFloat(e.target.value) })} 
+                    <input type="number" step="0.01" value={formData.total_base || ''} onChange={e => setFormData({ ...formData, total_base: parseFloat(e.target.value) })} 
                       className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none text-right font-mono" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">IVA (€)</label>
-                    <input type="number" step="0.01" value={formData.importe_iva || ''} onChange={e => setFormData({ ...formData, importe_iva: parseFloat(e.target.value) })} 
+                    <input type="number" step="0.01" value={formData.total_iva || ''} onChange={e => setFormData({ ...formData, total_iva: parseFloat(e.target.value) })} 
                       className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none text-right font-mono" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">IRPF (€)</label>
-                    <input type="number" step="0.01" value={formData.importe_irpf || ''} onChange={e => setFormData({ ...formData, importe_irpf: parseFloat(e.target.value) })} 
+                    <input type="number" step="0.01" value={formData.total_irpf || ''} onChange={e => setFormData({ ...formData, total_irpf: parseFloat(e.target.value) })} 
                       className="w-full px-3 py-2 bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none text-right font-mono" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">TOTAL a Pagar (€)</label>
-                    <input type="number" step="0.01" value={formData.importe_total || ''} onChange={e => setFormData({ ...formData, importe_total: parseFloat(e.target.value) })} 
+                    <input type="number" step="0.01" value={formData.importe || ''} onChange={e => setFormData({ ...formData, importe: parseFloat(e.target.value) })} 
                       className="w-full px-3 py-2 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 text-indigo-900 dark:text-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500/50 outline-none text-right font-mono font-bold text-lg" />
                   </div>
                 </div>
