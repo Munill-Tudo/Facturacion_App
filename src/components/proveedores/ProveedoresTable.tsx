@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Proveedor, getProveedores } from "@/app/proveedores/actions";
 import { Users, Search, Plus } from "lucide-react";
 import { ModalEditarProveedor } from "@/components/proveedores/ModalEditarProveedor";
+import { TipoDefectoSelect } from "@/components/proveedores/TipoDefectoSelect";
 
 export function ProveedoresTable() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -64,6 +65,7 @@ export function ProveedoresTable() {
                 <th className="px-6 py-4 font-semibold">Razón Social</th>
                 <th className="px-6 py-4 font-semibold">NIF</th>
                 <th className="px-6 py-4 font-semibold">Contacto</th>
+                <th className="px-6 py-4 font-semibold">Clasificación Automática</th>
                 <th className="px-6 py-4 font-semibold">IBAN Bancario</th>
                 <th className="px-6 py-4 font-semibold">Población</th>
               </tr>
@@ -88,6 +90,9 @@ export function ProveedoresTable() {
                     <td className="px-6 py-4 text-gray-500">
                       <p>{p.email || '-'}</p>
                       <p className="text-xs">{p.telefono}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <TipoDefectoSelect id={p.id} initialTipo={p.tipo_defecto} />
                     </td>
                     <td className="px-6 py-4 font-mono text-gray-500 text-xs">{p.iban || 'No registrado'}</td>
                     <td className="px-6 py-4 text-gray-500">{p.poblacion || '-'}</td>

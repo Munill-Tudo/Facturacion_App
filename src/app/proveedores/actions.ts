@@ -106,3 +106,10 @@ export async function buscarOCrearProveedorPorNIF(payload: Partial<Proveedor>) {
   revalidatePath('/proveedores');
   return nuevo as Proveedor;
 }
+
+export async function changeTipoDefectoProveedor(id: string, nuevoTipo: string) {
+  const tipo = !nuevoTipo || nuevoTipo === '' ? null : nuevoTipo;
+  await supabase.from('proveedores').update({ tipo_defecto: tipo }).eq('id', id);
+  revalidatePath('/proveedores');
+  revalidatePath('/facturas');
+}
