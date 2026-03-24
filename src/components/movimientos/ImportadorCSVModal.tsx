@@ -166,7 +166,7 @@ export function ImportadorCSVModal({ onComplete, onCancel }: { onComplete: (msg:
         setIsSubmitting(false);
         return;
       }
-      onComplete(`Excel importado con éxito: ${result.inserted} nuevos, ${result.duplicates} ignorados por duplicidad.`);
+      onComplete(`Excel importado con éxito: ${result.inserted} nuevos, ${result.duplicates} ignorados por duplicidad. ¡Se han auto-conciliado ${result.autoconciliados} pagos matemáticamente!`);
     } catch (e: any) {
       setError(e.message || "Error inesperado al subir a la base de datos.");
       setIsSubmitting(false);
