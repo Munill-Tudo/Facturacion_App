@@ -239,7 +239,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                     onChange={e => setSelectedIds(e.target.checked ? filtered.map(f => f.id) : [])}
                     className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
                 </th>
-                <th className="py-3 font-medium px-4">Nº Rec.</th>
+                <th className="py-3 font-medium px-4">Nº Fac. Recibida</th>
                 <th className="py-3 font-medium px-4">Nº Factura</th>
                 <th className="py-3 font-medium px-4">Fecha</th>
                 <th className="py-3 font-medium px-4">Proveedor</th>
@@ -265,7 +265,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                       onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
                       className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
                   </td>
-                  <td className="py-3 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">REC-{String(inv.id).padStart(4, '0')}</td>
+                  <td className="py-3 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">Fc. Rec.-{String(inv.id).padStart(4, '0')}</td>
                   <td className="py-3 px-4 font-mono font-medium text-indigo-600 dark:text-indigo-400">
                     <div className="flex items-center gap-1.5"><Hash className="w-3 h-3" />{inv.numero || <span className="text-gray-400 text-xs">—</span>}</div>
                   </td>

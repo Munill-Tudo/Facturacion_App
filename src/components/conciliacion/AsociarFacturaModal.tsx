@@ -75,7 +75,7 @@ export function AsociarFacturaModal({
               <div key={f.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${isMatch ? 'border-indigo-200 bg-indigo-50/50 dark:border-indigo-500/30 dark:bg-indigo-500/5' : 'border-gray-100 bg-white hover:border-gray-300 dark:border-gray-800 dark:bg-[#0a0a0a] dark:hover:border-gray-700'}`}>
                 <div>
                   <div className="flex gap-2 items-center mb-1">
-                    <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">REC-{String(f.id).padStart(4,'0')}</span>
+                    <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">Fc. Rec.-{String(f.id).padStart(4,'0')}</span>
                     {isMatch && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 rounded uppercase tracking-wider">Recomendado</span>}
                   </div>
                   <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{f.nombre_proveedor || f.cliente || 'Sin proveedor'}</h3>

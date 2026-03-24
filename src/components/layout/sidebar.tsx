@@ -39,7 +39,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
         {role !== 'administracion' && (
           <NavItem href="/" icon={<LayoutDashboard className="w-5 h-5 shrink-0" />} label="Dashboard" isCollapsed={isCollapsed} active={pathname === '/'} />
         )}
-        <NavItem href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Facturas" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
+        <NavItem href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Fc. Recibidas" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
         <NavItem href="/suplidos" icon={<CreditCard className="w-5 h-5 shrink-0" />} label="Suplidos" isCollapsed={isCollapsed} active={pathname === '/suplidos'} />
         <NavItem href="/proveedores" icon={<Settings className="w-5 h-5 shrink-0" />} label="Proveedores" isCollapsed={isCollapsed} active={pathname === '/proveedores'} />
         <NavItem href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />

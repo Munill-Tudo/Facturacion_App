@@ -211,7 +211,7 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
                       onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
                       className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" />
                   </td>
-                  <td className="py-4 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">REC-{String(inv.id).padStart(4, '0')}</td>
+                  <td className="py-4 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">Fc. Rec.-{String(inv.id).padStart(4, '0')}</td>
                   <td className="py-4 px-4 text-gray-500">
                     <div className="flex items-center gap-1.5"><Calendar className="w-3 h-3" />{inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}</div>
                   </td>

@@ -303,7 +303,7 @@ export default function Dashboard() {
             <tbody className="text-sm border-t border-gray-100 dark:border-gray-800">
               {recentInvoices.length > 0 ? recentInvoices.map((inv) => (
                 <tr key={inv.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                  <td className="py-4 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400">REC-{String(inv.id).padStart(4,'0')}</td>
+                  <td className="py-4 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">Fc. Rec.-{String(inv.id).padStart(4,'0')}</td>
                   <td className="py-4 px-4 text-gray-500">{inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}</td>
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2">

@@ -70,7 +70,7 @@ export default async function PapeleraList() {
                   
                   {/* Número de Recepción */}
                   <td className="py-3 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">
-                    REC-{String(inv.id).padStart(4, '0')}
+                    Fc. Rec.-{String(inv.id).padStart(4, '0')}
                   </td>
 
                   {/* Número Factura */}

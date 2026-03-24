@@ -29,7 +29,7 @@ export default async function FacturaDetail({ params }: { params: Promise<{ id: 
             Detalle de Factura
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            REC-{String(inv.id).padStart(4, '0')} · {inv.numero || 'Sin número de factura'}
+            Fc. Rec.-{String(inv.id).padStart(4, '0')} · {inv.numero || 'Sin número de factura'}
           </p>
         </div>
         {inv.file_url && (
