@@ -3,19 +3,25 @@ import { supabase } from '@/lib/supabase';
 import { buscarOCrearProveedorPorNIF } from '@/app/proveedores/actions';
 import OpenAI from 'openai';
 
-const SYSTEM_PROMPT = `Eres un asistente experto en contabilidad española. Extrae los siguientes datos de la factura adjunta en formato JSON exacto.
+const SYSTEM_PROMPT = `Eres un asistente experto en contabilidad española analizando facturas recibidas por el despacho "Munill Abogados SLP" (CIF: B44650307).
+
+REGLA CRÍTICA: La empresa "Munill Abogados SLP" o "Munill-Tudó Abogados" y el CIF "B44650307" son SIEMPRE el RECEPTOR/DESTINATARIO de la factura. NUNCA deben aparecer como proveedor/emisor en tu respuesta.
+
+Tu tarea es extraer los datos del EMISOR/PROVEEDOR: la empresa o persona física que HA EMITIDO esta factura Y QUE COBRA el dinero. Es decir, quien aparece en el encabezado de la factura como "De:", "Emisor:", "Proveedor:", o cuyo nombre y CIF aparece en la parte superior del documento emitiendo la factura.
+
 Si un dato no existe, devuelve null. Valores numéricos sin símbolos de moneda. Formato de fecha YYYY-MM-DD.
-Campos requeridos:
-- cliente (nombre del proveedor/emisor de la factura)
-- nif (CIF/NIF del proveedor)
-- domicilio (calle y número)
-- poblacion
-- provincia
-- cp (código postal)
-- fecha (YYYY-MM-DD)
+
+Devuelve ÚNICAMENTE este JSON:
+- cliente (nombre del EMISOR de la factura, quien cobra)
+- nif (CIF/NIF del EMISOR, quien cobra)
+- domicilio (dirección del EMISOR)
+- poblacion (población del EMISOR)
+- provincia (provincia del EMISOR)
+- cp (código postal del EMISOR)
+- fecha (fecha de emisión de la factura, YYYY-MM-DD)
 - numero (número de factura)
-- concepto (breve descripción del servicio o producto)
-- importe (total final a pagar en euros, como número float)`;
+- concepto (descripción del servicio o producto facturado)
+- importe (total final a pagar en euros, número float, incluido IVA si aplica)`;
 
 export async function POST(request: Request) {
   try {

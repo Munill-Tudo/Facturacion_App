@@ -66,6 +66,11 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
             </div>
           )}
         </div>
+        {!isCollapsed && (
+          <p className="mt-3 text-center text-[10px] font-mono text-gray-300 dark:text-gray-700 select-none">
+            v1.002
+          </p>
+        )}
       </div>
     </aside>
   );
