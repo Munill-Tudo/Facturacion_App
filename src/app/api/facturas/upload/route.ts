@@ -3,6 +3,20 @@ import { supabase } from '@/lib/supabase';
 import { buscarOCrearProveedorPorNIF } from '@/app/proveedores/actions';
 import OpenAI from 'openai';
 
+const SYSTEM_PROMPT = `Eres un asistente experto en contabilidad española. Extrae los siguientes datos de la factura adjunta en formato JSON exacto.
+Si un dato no existe, devuelve null. Valores numéricos sin símbolos de moneda. Formato de fecha YYYY-MM-DD.
+Campos requeridos:
+- cliente (nombre del proveedor/emisor de la factura)
+- nif (CIF/NIF del proveedor)
+- domicilio (calle y número)
+- poblacion
+- provincia
+- cp (código postal)
+- fecha (YYYY-MM-DD)
+- numero (número de factura)
+- concepto (breve descripción del servicio o producto)
+- importe (total final a pagar en euros, como número float)`;
+
 export async function POST(request: Request) {
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -20,60 +34,39 @@ export async function POST(request: Request) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const base64PDF = buffer.toString('base64');
 
-    // 1. Subir el PDF a la API de OpenAI para que lo lea directamente (sin pdf-parse)
-    const openaiFile = await openai.files.create({
-      file: new File([buffer], file.name, { type: 'application/pdf' }),
-      purpose: 'user_data',
-    });
-
-    // 2. Extraer datos con gpt-4o que puede leer PDFs nativamente
-    const completion = await openai.chat.completions.create({
+    // 1. Extraer datos del PDF con OpenAI Responses API (soporta PDFs nativamente via base64)
+    const response = await (openai as any).responses.create({
       model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: `Eres un asistente experto en contabilidad española. Extrae los siguientes datos de la factura adjunta en formato JSON exacto.
-Si un dato no existe, devuelve null. Valores numéricos sin símbolos de moneda. Formato de fecha YYYY-MM-DD.
-Campos requeridos:
-- cliente (nombre del proveedor/emisor de la factura)
-- nif (CIF/NIF del proveedor)
-- domicilio (calle y número)
-- poblacion
-- provincia
-- cp (código postal)
-- fecha (YYYY-MM-DD)
-- numero (número de factura)
-- concepto (breve descripción del servicio o producto)
-- importe (total final a pagar, número float sin IVA no, TOTAL a pagar)`
-        },
+      instructions: SYSTEM_PROMPT,
+      input: [
         {
           role: 'user',
           content: [
             {
-              type: 'text',
-              text: 'Extrae los datos de esta factura en el formato JSON indicado.'
+              type: 'input_file',
+              filename: file.name,
+              file_data: `data:application/pdf;base64,${base64PDF}`,
             },
             {
-              // @ts-ignore – File input type is supported by gpt-4o via Files API
-              type: 'file',
-              file: { file_id: openaiFile.id }
-            }
-          ]
-        }
+              type: 'input_text',
+              text: 'Extrae los datos de esta factura en formato JSON según las instrucciones.',
+            },
+          ],
+        },
       ],
-      response_format: { type: 'json_object' }
+      text: {
+        format: { type: 'json_object' },
+      },
     });
 
-    // Limpiar el archivo de OpenAI después de usarlo
-    await openai.files.del(openaiFile.id).catch(() => {});
-
-    const aiContent = completion.choices[0]?.message?.content;
+    const aiContent = response.output_text;
     if (!aiContent) throw new Error('No se pudo extraer el contenido con IA');
 
     const extractedData = JSON.parse(aiContent);
 
-    // 3. Subir archivo a Google Drive mediante n8n (o a Supabase Storage como fallback)
+    // 2. Subir archivo a Google Drive mediante n8n (o Supabase Storage como fallback)
     let archivo_url = null;
     const n8nDriveWebhook = process.env.N8N_DRIVE_WEBHOOK_URL;
 
@@ -85,7 +78,7 @@ Campos requeridos:
 
         const n8nRes = await fetch(n8nDriveWebhook, {
           method: 'POST',
-          body: driveFormData
+          body: driveFormData,
         });
 
         if (n8nRes.ok) {
@@ -114,7 +107,7 @@ Campos requeridos:
       }
     }
 
-    // 4. Insertar en Supabase
+    // 3. Insertar en Supabase
     const { fecha, cliente, concepto, importe, numero, nif, domicilio, cp, poblacion, provincia } = extractedData;
 
     if (!cliente || importe === undefined || importe === null) {
@@ -132,7 +125,7 @@ Campos requeridos:
         direccion: domicilio || null,
         cp: cp || null,
         poblacion: poblacion || null,
-        provincia: provincia || null
+        provincia: provincia || null,
       });
       if (prov && prov.tipo_defecto) {
         tipoAsignado = prov.tipo_defecto;
@@ -153,7 +146,7 @@ Campos requeridos:
         importe: parseFloat(importe),
         estado: 'Pendiente',
         tipo: tipoAsignado || null,
-        archivo_url: archivo_url
+        archivo_url: archivo_url,
       }])
       .select();
 
@@ -165,7 +158,7 @@ Campos requeridos:
     return NextResponse.json({
       success: true,
       factura: insertData[0],
-      extracted: extractedData
+      extracted: extractedData,
     });
 
   } catch (err: any) {
