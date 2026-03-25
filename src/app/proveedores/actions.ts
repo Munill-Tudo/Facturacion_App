@@ -3,6 +3,25 @@
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 
+/**
+ * Normaliza un NIF/CIF español al formato estándar CON guión entre letra y números.
+ * Ejemplos: "B44650307" → "B-44650307" | "12345678A" → "12345678-A" | "B-44650307" → "B-44650307"
+ */
+export function normalizarNIF(nif: string): string {
+  const raw = nif.toUpperCase().replace(/[\s-]/g, ''); // quitar espacios y guiones
+  // CIF/NIF tipo letra + números: B12345678 → B-12345678
+  if (/^[A-Z]\d+$/.test(raw)) return `${raw[0]}-${raw.slice(1)}`;
+  // NIF tipo números + letra: 12345678A → 12345678-A
+  if (/^\d+[A-Z]$/.test(raw)) return `${raw.slice(0, -1)}-${raw.slice(-1)}`;
+  // Formato desconocido o ya correcto: devolver en mayúsculas sin espacios
+  return raw;
+}
+
+/** Devuelve el NIF sin ningún guión (para búsquedas flexibles) */
+function nifRaw(nif: string): string {
+  return nif.toUpperCase().replace(/[\s-]/g, '');
+}
+
 export type Proveedor = {
   id: string;
   nif: string;
@@ -69,22 +88,33 @@ export async function guardarProveedor(proveedor: Partial<Proveedor>) {
 export async function buscarOCrearProveedorPorNIF(payload: Partial<Proveedor>) {
   if (!payload.nif || !payload.nombre) return null;
 
-  // Buscar por NIF
-  const { data: existente } = await supabase
+  // Normalizar el NIF al formato estándar (con guión)
+  const nifNormalizado = normalizarNIF(payload.nif);
+  const nifSinGuion = nifRaw(payload.nif);
+
+  // Buscar por NIF normalizado, sin guión y con guión original para no hacer duplicados
+  const { data: todos } = await supabase
     .from('proveedores')
-    .select('*')
-    .eq('nif', payload.nif)
-    .single();
+    .select('*');
+
+  const existente = (todos || []).find((p: Proveedor) => {
+    const pRaw = nifRaw(p.nif);
+    return pRaw === nifSinGuion;
+  });
 
   if (existente) {
+    // Si el NIF almacenado no está normalizado, lo actualizamos al formato estándar
+    if (existente.nif !== nifNormalizado) {
+      await supabase.from('proveedores').update({ nif: nifNormalizado }).eq('id', existente.id);
+    }
     return existente as Proveedor;
   }
 
-  // Si no existe, lo creamos
+  // Si no existe, lo creamos con el NIF normalizado
   const { data: nuevo, error } = await supabase
     .from('proveedores')
     .insert([{
-      nif: payload.nif,
+      nif: nifNormalizado,
       nombre: payload.nombre,
       direccion: payload.direccion || null,
       cp: payload.cp || null,
