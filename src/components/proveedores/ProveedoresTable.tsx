@@ -1,16 +1,21 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { Proveedor, getProveedores } from "@/app/proveedores/actions";
-import { Users, Search, Plus } from "lucide-react";
+import { Proveedor, getProveedores, eliminarProveedor } from "@/app/proveedores/actions";
+import { Users, Search, Plus, Trash2 } from "lucide-react";
 import { ModalEditarProveedor } from "@/components/proveedores/ModalEditarProveedor";
 import { TipoDefectoSelect } from "@/components/proveedores/TipoDefectoSelect";
+import { ConfirmDeleteModal } from "@/components/ui/ConfirmDeleteModal";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export function ProveedoresTable() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editingProv, setEditingProv] = useState<Partial<Proveedor> | null>(null);
+  const [deletingProv, setDeletingProv] = useState<Proveedor | null>(null);
+  const { role } = useAuth();
+  const isDireccion = role === 'direccion';
 
   const fetchProv = async () => {
     setLoading(true);
@@ -68,6 +73,7 @@ export function ProveedoresTable() {
                 <th className="px-6 py-4 font-semibold">Clasificación Automática</th>
                 <th className="px-6 py-4 font-semibold">IBAN Bancario</th>
                 <th className="px-6 py-4 font-semibold">Población</th>
+                {isDireccion && <th className="px-6 py-4 font-semibold text-right">Acciones</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800/60">
@@ -96,6 +102,18 @@ export function ProveedoresTable() {
                     </td>
                     <td className="px-6 py-4 font-mono text-gray-500 text-xs">{p.iban || 'No registrado'}</td>
                     <td className="px-6 py-4 text-gray-500">{p.poblacion || '-'}</td>
+                    {isDireccion && (
+                      <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
+                        <button
+                          onDoubleClick={e => e.stopPropagation()}
+                          onClick={e => { e.stopPropagation(); setDeletingProv(p); }}
+                          title="Eliminar proveedor"
+                          className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -109,6 +127,19 @@ export function ProveedoresTable() {
           proveedor={editingProv} 
           onClose={() => setEditingProv(null)} 
           onSave={() => { setEditingProv(null); fetchProv(); }} 
+        />
+      )}
+
+      {deletingProv && (
+        <ConfirmDeleteModal
+          title="¿Eliminar proveedor?"
+          message={`El proveedor "${deletingProv.nombre}" se moverá a la papelera. Solo Dirección puede eliminarlo definitivamente.`}
+          onClose={() => setDeletingProv(null)}
+          onConfirm={async () => {
+            await eliminarProveedor(deletingProv.id);
+            setDeletingProv(null);
+            fetchProv();
+          }}
         />
       )}
     </div>

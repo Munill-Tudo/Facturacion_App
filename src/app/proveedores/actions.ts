@@ -143,3 +143,44 @@ export async function changeTipoDefectoProveedor(id: string, nuevoTipo: string) 
   revalidatePath('/proveedores');
   revalidatePath('/facturas');
 }
+
+export async function eliminarProveedor(id: string) {
+  // Soft-delete: marcar como eliminado en lugar de borrar definitivamente
+  const { error } = await supabase
+    .from('proveedores')
+    .update({ eliminado: true })
+    .eq('id', id);
+  if (error) return { error: error.message };
+  revalidatePath('/proveedores');
+  revalidatePath('/papelera');
+  return { ok: true };
+}
+
+export async function restaurarProveedor(id: string) {
+  const { error } = await supabase
+    .from('proveedores')
+    .update({ eliminado: false })
+    .eq('id', id);
+  if (error) return { error: error.message };
+  revalidatePath('/proveedores');
+  revalidatePath('/papelera');
+  return { ok: true };
+}
+
+export async function eliminarProveedorDefinitivo(id: string) {
+  const { error } = await supabase.from('proveedores').delete().eq('id', id);
+  if (error) return { error: error.message };
+  revalidatePath('/proveedores');
+  revalidatePath('/papelera');
+  return { ok: true };
+}
+
+export async function getProveedoresEliminados() {
+  const { data, error } = await supabase
+    .from('proveedores')
+    .select('*')
+    .eq('eliminado', true)
+    .order('nombre', { ascending: true });
+  if (error) return [];
+  return data as Proveedor[];
+}
