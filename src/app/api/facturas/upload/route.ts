@@ -2,12 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { buscarOCrearProveedorPorNIF } from '@/app/proveedores/actions';
 import OpenAI from 'openai';
-const pdfParse = require('pdf-parse');
-
-// Asegúrate de tener OPENAI_API_KEY en tu .env.local
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',
-});
 
 export async function POST(request: Request) {
   try {
@@ -18,9 +12,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No se ha subido ningún archivo' }, { status: 400 });
     }
 
-    // 1. Convertir a Buffer y extraer texto con pdf-parse
+    // 1. Convertir a Buffer y extraer texto con pdf-parse (carga dinámica para evitar errores en build)
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pdfParse = require('pdf-parse');
     const pdfData = await pdfParse(buffer);
     const pdfText = pdfData.text;
 
@@ -33,6 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Falta la clave OPENAI_API_KEY en las variables de entorno' }, { status: 500 });
     }
 
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
