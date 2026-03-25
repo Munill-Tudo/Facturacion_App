@@ -12,12 +12,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No se ha subido ningún archivo' }, { status: 400 });
     }
 
-    // 1. Convertir a Buffer y extraer texto con pdf-parse (carga dinámica para evitar errores en build)
+    // 1. Convertir a Buffer y extraer texto con pdf-parse
+    // Usamos la ruta interna para evitar el error de lectura de archivos de test en Vercel serverless
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdfParse = require('pdf-parse');
-    const pdfData = await pdfParse(buffer);
+    const pdfParseLib = require('pdf-parse/lib/pdf-parse.js');
+    const pdfData = await pdfParseLib(buffer);
     const pdfText = pdfData.text;
 
     if (!pdfText || pdfText.trim() === '') {

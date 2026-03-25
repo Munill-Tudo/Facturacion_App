@@ -56,7 +56,8 @@ export function UploadInvoiceModal({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Error procesando la factura.');
+        const detail = data.details ? ` (${data.details})` : '';
+        throw new Error((data.error || 'Error procesando la factura.') + detail);
       }
 
       setSuccessMsg(`Factura de ${data.factura.cliente || 'Proveedor'} guardada correctamente. Recargando...`);
