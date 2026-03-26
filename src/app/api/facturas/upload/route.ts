@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(arrayBuffer);
     const base64PDF = buffer.toString('base64');
 
-    // 1. Extraer datos del PDF con OpenAI Responses API (soporta PDFs nativamente via base64)
+    // 1. Extraer datos del PDF con OpenAI Responses API
     const response = await (openai as any).responses.create({
       model: 'gpt-4o',
       instructions: SYSTEM_PROMPT,
@@ -74,63 +74,6 @@ export async function POST(request: Request) {
     if (!aiContent) throw new Error('No se pudo extraer el contenido con IA');
 
     const extractedData = JSON.parse(aiContent);
-
-    // 2. Subir archivo a Google Drive mediante n8n (o Supabase Storage como fallback)
-    let archivo_url = null;
-    let n8nError: string | null = null;
-    const n8nDriveWebhook = process.env.N8N_DRIVE_WEBHOOK_URL;
-
-    if (n8nDriveWebhook) {
-      try {
-        // Creamos un nuevo File desde el buffer ya leído para asegurar que es legible
-        const fileForN8n = new File([buffer], file.name || 'factura.pdf', {
-          type: file.type || 'application/pdf',
-        });
-
-        const driveFormData = new FormData();
-        driveFormData.append('file', fileForN8n);
-        // Enviamos campos individuales para que n8n los lea sin necesidad de parsear JSON
-        driveFormData.append('factura_fecha', extractedData.fecha || '');
-        driveFormData.append('factura_cliente', extractedData.cliente || '');
-        driveFormData.append('factura_importe', String(extractedData.importe || 0));
-        driveFormData.append('factura_numero', extractedData.numero || '');
-        // También enviamos el JSON completo por si acaso
-        driveFormData.append('data', JSON.stringify(extractedData));
-
-        const n8nRes = await fetch(n8nDriveWebhook, {
-          method: 'POST',
-          body: driveFormData,
-        });
-
-        if (n8nRes.ok) {
-          const n8nData = await n8nRes.json();
-          archivo_url = n8nData.archivo_url || null;
-        } else {
-          n8nError = `Status ${n8nRes.status}: ${await n8nRes.text()}`;
-          console.error('El webhook de n8n devolvió un error:', n8nError);
-        }
-      } catch (err: any) {
-        n8nError = err.message;
-        console.error('Error enviando el archivo al webhook de n8n para Drive:', err);
-      }
-    } else {
-      // Fallback: Supabase Storage
-      try {
-        const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-        const { error: storageError } = await supabase.storage
-          .from('facturas')
-          .upload(fileName, buffer, { contentType: 'application/pdf' });
-
-        if (!storageError) {
-          const { data: publicUrlData } = supabase.storage.from('facturas').getPublicUrl(fileName);
-          archivo_url = publicUrlData.publicUrl;
-        }
-      } catch (err) {
-        console.warn('Error subiendo a Supabase Storage (fallback):', err);
-      }
-    }
-
-    // 3. Insertar en Supabase
     const { fecha, cliente, concepto, importe, numero, nif, domicilio, cp, poblacion, provincia, total_base, total_iva, total_irpf } = extractedData;
 
     if (!cliente || importe === undefined || importe === null) {
@@ -140,6 +83,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // 2. Buscar o crear proveedor
     let tipoAsignado = null;
     if (nif) {
       const prov = await buscarOCrearProveedorPorNIF({
@@ -155,6 +99,7 @@ export async function POST(request: Request) {
       }
     }
 
+    // 3. Insertar en Supabase PRIMERO para obtener el ID incremental
     const { data: insertData, error: insertError } = await supabase
       .from('facturas')
       .insert([{
@@ -172,7 +117,7 @@ export async function POST(request: Request) {
         importe: parseFloat(importe),
         estado: 'Pendiente',
         tipo: tipoAsignado || null,
-        archivo_url: archivo_url,
+        archivo_url: null, // Se actualizará después con la URL de Drive
       }])
       .select();
 
@@ -181,9 +126,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
+    const facturaId: number = insertData[0]?.id;
+
+    // 4. Subir archivo a Google Drive mediante n8n (con el ID ya generado)
+    let archivo_url: string | null = null;
+    const n8nDriveWebhook = process.env.N8N_DRIVE_WEBHOOK_URL;
+
+    if (n8nDriveWebhook) {
+      try {
+        const fileForN8n = new File([buffer], file.name || 'factura.pdf', {
+          type: file.type || 'application/pdf',
+        });
+
+        const driveFormData = new FormData();
+        driveFormData.append('file', fileForN8n);
+        // Campos individuales accesibles en n8n como $input.item.json.body.*
+        driveFormData.append('factura_id', String(facturaId));
+        driveFormData.append('factura_fecha', extractedData.fecha || '');
+        driveFormData.append('factura_cliente', extractedData.cliente || '');
+        driveFormData.append('factura_importe', String(extractedData.importe || 0));
+        driveFormData.append('factura_numero', extractedData.numero || '');
+        driveFormData.append('data', JSON.stringify(extractedData));
+
+        const n8nRes = await fetch(n8nDriveWebhook, {
+          method: 'POST',
+          body: driveFormData,
+        });
+
+        if (n8nRes.ok) {
+          const n8nData = await n8nRes.json();
+          archivo_url = n8nData.archivo_url || null;
+
+          // 5. Actualizar el registro con la URL de Drive
+          if (archivo_url && facturaId) {
+            await supabase.from('facturas').update({ archivo_url }).eq('id', facturaId);
+          }
+        } else {
+          console.error('El webhook de n8n devolvió un error:', await n8nRes.text());
+        }
+      } catch (err: any) {
+        console.error('Error enviando el archivo al webhook de n8n para Drive:', err.message);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      factura: insertData[0],
+      factura: { ...insertData[0], archivo_url },
       extracted: extractedData,
     });
 
