@@ -21,6 +21,9 @@ Devuelve ÚNICAMENTE este JSON:
 - fecha (fecha de emisión de la factura, YYYY-MM-DD)
 - numero (número de factura)
 - concepto (descripción del servicio o producto facturado)
+- total_base (base imponible sin IVA ni retenciones, número float)
+- total_iva (importe del IVA, número float)
+- total_irpf (importe de la retención IRPF si la hay, número float)
 - importe (total final a pagar en euros, número float, incluido IVA si aplica)`;
 
 export async function POST(request: Request) {
@@ -86,6 +89,12 @@ export async function POST(request: Request) {
 
         const driveFormData = new FormData();
         driveFormData.append('file', fileForN8n);
+        // Enviamos campos individuales para que n8n los lea sin necesidad de parsear JSON
+        driveFormData.append('factura_fecha', extractedData.fecha || '');
+        driveFormData.append('factura_cliente', extractedData.cliente || '');
+        driveFormData.append('factura_importe', String(extractedData.importe || 0));
+        driveFormData.append('factura_numero', extractedData.numero || '');
+        // También enviamos el JSON completo por si acaso
         driveFormData.append('data', JSON.stringify(extractedData));
 
         const n8nRes = await fetch(n8nDriveWebhook, {
@@ -122,7 +131,7 @@ export async function POST(request: Request) {
     }
 
     // 3. Insertar en Supabase
-    const { fecha, cliente, concepto, importe, numero, nif, domicilio, cp, poblacion, provincia } = extractedData;
+    const { fecha, cliente, concepto, importe, numero, nif, domicilio, cp, poblacion, provincia, total_base, total_iva, total_irpf } = extractedData;
 
     if (!cliente || importe === undefined || importe === null) {
       return NextResponse.json(
@@ -157,6 +166,9 @@ export async function POST(request: Request) {
         direccion_proveedor: domicilio || null,
         poblacion_proveedor: poblacion || null,
         concepto: concepto || 'Recepción Manual',
+        total_base: total_base ? parseFloat(total_base) : null,
+        total_iva: total_iva ? parseFloat(total_iva) : null,
+        total_irpf: total_irpf ? parseFloat(total_irpf) : null,
         importe: parseFloat(importe),
         estado: 'Pendiente',
         tipo: tipoAsignado || null,
