@@ -85,6 +85,8 @@ export async function POST(request: Request) {
 
     // 2. Buscar o crear proveedor
     let tipoAsignado = null;
+    let tipoGastoAsignado: string | null = null;
+    let subtipoGastoAsignado: string | null = null;
     if (nif) {
       const prov = await buscarOCrearProveedorPorNIF({
         nif: nif.toUpperCase(),
@@ -94,8 +96,10 @@ export async function POST(request: Request) {
         poblacion: poblacion || null,
         provincia: provincia || null,
       });
-      if (prov && prov.tipo_defecto) {
-        tipoAsignado = prov.tipo_defecto;
+      if (prov) {
+        tipoAsignado = prov.tipo_defecto || null;
+        tipoGastoAsignado = (prov as any).tipo_gasto_defecto || null;
+        subtipoGastoAsignado = (prov as any).subtipo_gasto_defecto || null;
       }
     }
 
@@ -117,6 +121,8 @@ export async function POST(request: Request) {
         importe: parseFloat(importe),
         estado: 'Pendiente',
         tipo: tipoAsignado || null,
+        tipo_gasto: tipoGastoAsignado,
+        subtipo_gasto: subtipoGastoAsignado,
         archivo_url: null, // Se actualizará después con la URL de Drive
       }])
       .select();

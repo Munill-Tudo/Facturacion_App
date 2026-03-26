@@ -16,6 +16,9 @@ export type Proveedor = {
   telefono: string | null;
   iban: string | null;
   tipo_defecto?: string | null;
+  tipo_gasto_defecto?: string | null;
+  subtipo_gasto_defecto?: string | null;
+  eliminado?: boolean;
   created_at?: string;
 };
 

@@ -33,30 +33,33 @@ interface Factura {
   tipo_gasto?: string; subtipo_gasto?: string; numero_recepcion?: string;
 }
 
-// --- Resizable columns hook ---
+// --- Resizable columns hook (ref-based to avoid stale closures) ---
 function useResizableColumns(initialWidths: Record<string, number>) {
   const [widths, setWidths] = useState(initialWidths);
-  const startX = useRef(0);
-  const startW = useRef(0);
-  const currentCol = useRef('');
+  const dragRef = useRef<{ startX: number; startW: number; col: string } | null>(null);
 
+  // useCallback with empty deps — drag state lives entirely in dragRef, no stale closure
   const onMouseDown = useCallback((col: string, e: React.MouseEvent) => {
     e.preventDefault();
-    startX.current = e.clientX;
-    startW.current = widths[col] ?? 120;
-    currentCol.current = col;
+    e.stopPropagation();
+    // Read actual rendered th width from DOM (avoids reading stale React state)
+    const th = (e.currentTarget as HTMLElement).closest('th') as HTMLElement | null;
+    const startW = th ? th.offsetWidth : 120;
+    dragRef.current = { startX: e.clientX, startW, col };
 
     const onMove = (mv: MouseEvent) => {
-      const diff = mv.clientX - startX.current;
-      setWidths(prev => ({ ...prev, [currentCol.current]: Math.max(60, startW.current + diff) }));
+      if (!dragRef.current) return;
+      const newW = Math.max(60, dragRef.current.startW + mv.clientX - dragRef.current.startX);
+      setWidths(prev => ({ ...prev, [dragRef.current!.col]: newW }));
     };
     const onUp = () => {
+      dragRef.current = null;
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [widths]);
+  }, []); // empty deps — safe because all state is via dragRef
 
   return { widths, onMouseDown };
 }
@@ -278,7 +281,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
       {/* TABLE */}
       <div className="bg-white dark:bg-[#0a0a0a] rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
+          <table className="w-full text-left border-collapse text-sm" style={{ tableLayout: 'fixed' }}>
             <thead>
               <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-gray-800 text-gray-500">
                 <th className="py-3 px-4 w-12">
