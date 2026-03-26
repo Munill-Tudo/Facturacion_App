@@ -32,6 +32,9 @@ export default function LoginPage() {
 
       const { user } = await res.json();
       
+      // Mark this tab as having an active session (used by AuthProvider for auto-logout on browser close)
+      sessionStorage.setItem('app_session_active', '1');
+      
       if (user.role === 'administracion') {
         router.push('/facturas');
       } else {

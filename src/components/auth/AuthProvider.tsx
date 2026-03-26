@@ -23,11 +23,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Auto-logout on browser/tab close:
+    // sessionStorage is cleared when the browser window is closed.
+    // If we open the app fresh (no session flag) but a cookie exists → force logout.
+    const hasTabSession = typeof sessionStorage !== 'undefined'
+      ? sessionStorage.getItem('app_session_active')
+      : null;
+
     fetch('/api/auth/me')
       .then(res => res.json())
       .then(data => {
-        if (data && data.user) {
-          setUser(data.user);
+        if (data?.user) {
+          if (!hasTabSession) {
+            // Cookie from old session — user closed & reopened browser → force logout
+            fetch('/api/auth/logout', { method: 'POST' }).finally(() => {
+              window.location.href = '/login';
+            });
+          } else {
+            setUser(data.user);
+          }
         } else {
           setUser(null);
         }
@@ -37,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    sessionStorage.removeItem('app_session_active');
     await fetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
     window.location.href = '/login';

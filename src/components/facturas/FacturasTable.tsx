@@ -1,28 +1,25 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback } from 'react';
-import { Search, Hash, Building2, ExternalLink, Trash2, ChevronDown, CheckSquare, GripVertical } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Search, Hash, ExternalLink, Trash2, ChevronDown, CheckSquare, GripVertical } from 'lucide-react';
 import { TipoSelect } from '@/components/facturas/TipoSelect';
 import { EstadoSelect } from '@/components/facturas/EstadoSelect';
 import { TipoGastoSelect } from '@/components/facturas/TipoGastoSelect';
 import { moverAPapeleraClient, bulkUpdateFacturaEstado } from '@/app/facturas/actions';
+import { useResizableColumns } from '@/lib/useResizableColumns';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { ConfirmDireccionModal } from '@/components/auth/ConfirmDireccionModal';
+import { ConfirmDeleteModal } from '@/components/ui/ConfirmDeleteModal';
 import { ModalEditarFactura } from '@/components/facturas/ModalEditarFactura';
 
 const fmt = (v: number) => `€ ${v.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
-
 function getISOWeek(d: Date): number {
   const date = new Date(d);
   date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
   return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
-
-function getQuarter(d: Date): number {
-  return Math.floor(d.getMonth() / 3) + 1;
-}
+function getQuarter(d: Date): number { return Math.floor(d.getMonth() / 3) + 1; }
 
 interface Factura {
   id: number; numero?: string; fecha?: string; fecha_pago?: string;
@@ -33,35 +30,16 @@ interface Factura {
   tipo_gasto?: string; subtipo_gasto?: string; numero_recepcion?: string;
 }
 
-// --- Resizable columns hook (ref-based to avoid stale closures) ---
-function useResizableColumns(initialWidths: Record<string, number>) {
-  const [widths, setWidths] = useState(initialWidths);
-  const dragRef = useRef<{ startX: number; startW: number; col: string } | null>(null);
-
-  // useCallback with empty deps — drag state lives entirely in dragRef, no stale closure
-  const onMouseDown = useCallback((col: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Read actual rendered th width from DOM (avoids reading stale React state)
-    const th = (e.currentTarget as HTMLElement).closest('th') as HTMLElement | null;
-    const startW = th ? th.offsetWidth : 120;
-    dragRef.current = { startX: e.clientX, startW, col };
-
-    const onMove = (mv: MouseEvent) => {
-      if (!dragRef.current) return;
-      const newW = Math.max(60, dragRef.current.startW + mv.clientX - dragRef.current.startX);
-      setWidths(prev => ({ ...prev, [dragRef.current!.col]: newW }));
-    };
-    const onUp = () => {
-      dragRef.current = null;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, []); // empty deps — safe because all state is via dragRef
-
-  return { widths, onMouseDown };
+// Module-level to avoid re-creation every render
+function ResizeHandle({ col, onMouseDown }: { col: string; onMouseDown: (col: string, e: React.MouseEvent) => void }) {
+  return (
+    <span
+      onMouseDown={e => onMouseDown(col, e)}
+      className="absolute right-0 top-0 h-full w-2 cursor-col-resize flex items-center justify-center opacity-0 group-hover/th:opacity-60 hover:!opacity-100 select-none z-10"
+    >
+      <GripVertical className="w-3 h-3 text-gray-400" />
+    </span>
+  );
 }
 
 export function FacturasTable({ data }: { data: Factura[] }) {
@@ -79,25 +57,15 @@ export function FacturasTable({ data }: { data: Factura[] }) {
   const [selQ, setSelQ] = useState('1');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBulking, setIsBulking] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [editingFactura, setEditingFactura] = useState<any>(null);
 
-  const { widths, onMouseDown } = useResizableColumns({
+  const { widths, onMouseDown } = useResizableColumns('cols_facturas', {
     num_rec: 110, num_fac: 100, fecha: 90, proveedor: 180,
     nif: 110, tipo_gasto: 160, tipo: 90, poblacion: 110,
     base: 90, iva: 80, pct_iva: 70, irpf: 80, pct_irpf: 72, total: 90,
     estado: 110, acciones: 80,
   });
-
-  // Resize handle helper
-  const ResizeHandle = ({ col }: { col: string }) => (
-    <span
-      onMouseDown={e => onMouseDown(col, e)}
-      className="absolute right-0 top-0 h-full w-2 cursor-col-resize flex items-center justify-center opacity-0 group-hover/th:opacity-60 hover:!opacity-100 select-none z-10"
-      title="Arrastrar para cambiar ancho"
-    >
-      <GripVertical className="w-3 h-3 text-gray-400" />
-    </span>
-  );
 
   const handleBulkChange = async (estado: string) => {
     if (!selectedIds.length) return;
@@ -262,19 +230,40 @@ export function FacturasTable({ data }: { data: Factura[] }) {
             <button onClick={() => handleBulkChange('Pendiente')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50">
               Pendiente
             </button>
+            {role === 'administracion' && (
+              <button onClick={() => setBulkDeleteConfirm(true)} disabled={isBulking}
+                className="px-3 py-1.5 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center gap-1 disabled:opacity-50">
+                <Trash2 className="w-3 h-3" /> Borrar
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Confirm Direccion Modal */}
+      {/* Confirm single delete */}
       {confirmModal && (
-        <ConfirmDireccionModal
-          actionLabel="mover la factura a la papelera"
-          onConfirmed={async () => {
-            setConfirmModal(null);
-            await moverAPapeleraClient(confirmModal.id);
+        <ConfirmDeleteModal
+          title="¿Mover factura a la papelera?"
+          message="La factura se moverá a la papelera. Podrás restaurarla desde ahí."
+          confirmLabel="Sí, mover"
+          onConfirm={async () => { await moverAPapeleraClient(confirmModal.id); setConfirmModal(null); router.refresh(); }}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
+
+      {/* Confirm bulk delete */}
+      {bulkDeleteConfirm && (
+        <ConfirmDeleteModal
+          title={`¿Mover ${selectedIds.length} facturas a la papelera?`}
+          message="Todas las seleccionadas se moverán a la papelera."
+          confirmLabel="Sí, mover todas"
+          onConfirm={async () => {
+            for (const id of selectedIds) await moverAPapeleraClient(id);
+            setSelectedIds([]);
+            setBulkDeleteConfirm(false);
+            router.refresh();
           }}
-          onCancel={() => setConfirmModal(null)}
+          onClose={() => setBulkDeleteConfirm(false)}
         />
       )}
 
@@ -314,7 +303,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                     className="py-3 font-medium px-4 relative group/th whitespace-nowrap"
                   >
                     {label}
-                    <ResizeHandle col={col} />
+                    <ResizeHandle col={col} onMouseDown={onMouseDown} />
                   </th>
                 ))}
               </tr>
@@ -341,13 +330,8 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400 text-xs">
                     {inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
-                        <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                      </div>
-                      <span className="font-medium text-gray-900 dark:text-white">{inv.nombre_proveedor || inv.cliente || '—'}</span>
-                    </div>
+                  <td className="py-2 px-3 font-medium text-gray-900 dark:text-white overflow-hidden text-ellipsis whitespace-nowrap">
+                    {inv.nombre_proveedor || inv.cliente || '—'}
                   </td>
                   <td className="py-3 px-4 font-mono text-gray-500 text-xs">{inv.nif_proveedor || '—'}</td>
                   <td className="py-3 px-4" onClick={e => e.stopPropagation()}>

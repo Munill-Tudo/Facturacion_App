@@ -1,18 +1,43 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Search, Building2, Calendar, ExternalLink, CheckCircle2, Circle, ChevronDown, CheckSquare } from 'lucide-react';
+import { useState, useMemo, useRef, useCallback } from 'react';
+import { Search, Calendar, ExternalLink, ChevronDown, CheckSquare, Trash2, GripVertical } from 'lucide-react';
 import { TipoSelect } from '@/components/facturas/TipoSelect';
 import { EditableCell } from '@/components/facturas/EditableCell';
 import { EstadoSelect } from '@/components/facturas/EstadoSelect';
-import { bulkUpdateFacturaEstado } from '@/app/facturas/actions';
+import { bulkUpdateFacturaEstado, moverAPapeleraClient } from '@/app/facturas/actions';
+import { useResizableColumns } from '@/lib/useResizableColumns';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { ConfirmDeleteModal } from '@/components/ui/ConfirmDeleteModal';
 
-const fmt = (v: number) => `€ ${v.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
+const fmt = (v: number | null | undefined) =>
+  v != null ? `€ ${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2 })}` : '—';
+const pct = (num: number | null | undefined, den: number | null | undefined) =>
+  (num && den) ? `${((num / den) * 100).toFixed(0)}%` : '—';
 function getQuarter(d: Date) { return Math.floor(d.getMonth() / 3) + 1; }
+
+// Resize handle displayed inside <th>
+function ResizeHandle({ col, onMouseDown }: { col: string; onMouseDown: (col: string, e: React.MouseEvent) => void }) {
+  return (
+    <span
+      onMouseDown={e => onMouseDown(col, e)}
+      className="absolute right-0 top-0 h-full w-2 cursor-col-resize flex items-center justify-center opacity-0 group-hover/th:opacity-60 hover:!opacity-100 select-none z-10"
+    >
+      <GripVertical className="w-3 h-3 text-gray-400" />
+    </span>
+  );
+}
+
+const INITIAL_WIDTHS = {
+  check: 44, num_rec: 100, fecha: 90, proveedor: 170, expediente: 110, cliente: 110,
+  tipo: 90, base: 80, iva: 75, pct_iva: 65, irpf: 75, pct_irpf: 68,
+  total: 85, deuda: 100, estado: 110, acciones: 72,
+};
 
 export function SuplidosTableClient({ data }: { data: any[] }) {
   const router = useRouter();
+  const { role } = useAuth();
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
   const [periodMode, setPeriodMode] = useState<'libre' | 'mes' | 'trimestre' | 'año'>('libre');
@@ -23,13 +48,27 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
   const [selQ, setSelQ] = useState('1');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBulking, setIsBulking] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ id: number } | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
-  const handleBulkChange = async (estado: string) => {
+  const { widths, onMouseDown } = useResizableColumns('cols_suplidos', INITIAL_WIDTHS);
+
+  const handleBulkEstado = async (estado: string) => {
     if (!selectedIds.length) return;
     setIsBulking(true);
     await bulkUpdateFacturaEstado(selectedIds, estado);
-    setSelectedIds([]); // clean after bulk
+    setSelectedIds([]);
     setIsBulking(false);
+    router.refresh();
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulking(true);
+    for (const id of selectedIds) await moverAPapeleraClient(id);
+    setSelectedIds([]);
+    setIsBulking(false);
+    setConfirmBulkDelete(false);
+    router.refresh();
   };
 
   const years = useMemo(() => {
@@ -63,11 +102,20 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
 
   const totalImporte = filtered.reduce((s, i) => s + (Number(i.importe) || 0), 0);
   const totalPendiente = filtered.filter(i => i.estado === 'Pendiente').reduce((s, i) => s + (Number(i.importe) || 0), 0);
-  const totalBase = filtered.reduce((s, i) => s + (Number(i.total_base) || 0), 0);
+  const totalDeuda = filtered.reduce((s, i) => s + (Number(i.importe) || 0) + (Number(i.total_irpf) || 0), 0);
+
+  const COLS: [string, string][] = [
+    ['num_rec', 'Nº Rec.'], ['fecha', 'Fecha'], ['proveedor', 'Proveedor'],
+    ['expediente', 'Nº Exp.'], ['cliente', 'Cliente'], ['tipo', 'Tipo'],
+    ['base', 'Base'], ['iva', 'IVA (€)'], ['pct_iva', 'IVA %'],
+    ['irpf', 'IRPF (€)'], ['pct_irpf', 'IRPF %'],
+    ['total', 'Total Fac.'], ['deuda', 'Deuda Cliente'],
+    ['estado', 'Estado'], ['acciones', 'Acciones'],
+  ];
 
   return (
     <div className="space-y-4">
-      {/* TOP TOTALS */}
+      {/* Totals */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="p-4 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-500/5">
           <p className="text-xs text-gray-500 mb-1">Total Suplidos</p>
@@ -77,13 +125,13 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
           <p className="text-xs text-gray-500 mb-1">Pendiente de cobrar</p>
           <p className="font-bold text-orange-600 dark:text-orange-400">{fmt(totalPendiente)}</p>
         </div>
-        <div className="p-4 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 bg-indigo-50/50 dark:bg-indigo-500/5">
-          <p className="text-xs text-gray-500 mb-1">Base Imponible</p>
-          <p className="font-bold text-indigo-700 dark:text-indigo-300">{fmt(totalBase)}</p>
+        <div className="p-4 rounded-2xl border border-violet-100 dark:border-violet-800/30 bg-violet-50/50 dark:bg-violet-500/5">
+          <p className="text-xs text-gray-500 mb-1">Deuda Total Clientes</p>
+          <p className="font-bold text-violet-700 dark:text-violet-400">{fmt(totalDeuda)}</p>
         </div>
       </div>
 
-      {/* FILTERS */}
+      {/* Filters */}
       <div className="bg-white dark:bg-[#0a0a0a] rounded-2xl border border-gray-100 dark:border-gray-800 p-4 space-y-3">
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-xs text-gray-500 font-medium">Período:</span>
@@ -97,19 +145,13 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
         <div className="flex flex-wrap gap-3 items-center">
           {periodMode === 'libre' && (
             <>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500 text-xs">Desde:</span>
-                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500 text-xs">Hasta:</span>
-                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
-              </div>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none" />
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none" />
             </>
           )}
           {(periodMode === 'mes' || periodMode === 'trimestre' || periodMode === 'año') && (
             <div className="relative">
-              <select value={selYear} onChange={e => setSelYear(e.target.value)} className="pl-3 pr-8 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black text-gray-700 dark:text-gray-300 focus:outline-none appearance-none">
+              <select value={selYear} onChange={e => setSelYear(e.target.value)} className="pl-3 pr-8 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none appearance-none">
                 {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
@@ -117,7 +159,7 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
           )}
           {periodMode === 'mes' && (
             <div className="relative">
-              <select value={selMonth} onChange={e => setSelMonth(e.target.value)} className="pl-3 pr-8 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black text-gray-700 dark:text-gray-300 focus:outline-none appearance-none">
+              <select value={selMonth} onChange={e => setSelMonth(e.target.value)} className="pl-3 pr-8 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none appearance-none">
                 {['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'].map((m,i) => (
                   <option key={i+1} value={(i+1).toString()}>{m}</option>
                 ))}
@@ -127,24 +169,22 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
           )}
           {periodMode === 'trimestre' && (
             <div className="relative">
-              <select value={selQ} onChange={e => setSelQ(e.target.value)} className="pl-3 pr-8 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black text-gray-700 dark:text-gray-300 focus:outline-none appearance-none">
-                <option value="1">1er Trimestre (Ene-Mar)</option>
-                <option value="2">2º Trimestre (Abr-Jun)</option>
-                <option value="3">3er Trimestre (Jul-Sep)</option>
-                <option value="4">4º Trimestre (Oct-Dic)</option>
+              <select value={selQ} onChange={e => setSelQ(e.target.value)} className="pl-3 pr-8 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none appearance-none">
+                <option value="1">1T (Ene-Mar)</option>
+                <option value="2">2T (Abr-Jun)</option>
+                <option value="3">3T (Jul-Sep)</option>
+                <option value="4">4T (Oct-Dic)</option>
               </select>
               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
             </div>
           )}
-        </div>
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar proveedor, expediente, cliente..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar proveedor, expediente..."
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none" />
           </div>
           <div className="relative">
-            <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)} className="pl-3 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black text-gray-700 dark:text-gray-300 focus:outline-none appearance-none cursor-pointer">
+            <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)} className="pl-3 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none appearance-none cursor-pointer">
               <option value="">Todos los estados</option>
               <option value="Pendiente">Pendiente</option>
               <option value="Pagada">Pagada</option>
@@ -155,96 +195,127 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
         </div>
       </div>
 
-      {/* BULK ACTIONS BAR */}
+      {/* Bulk actions bar */}
       {selectedIds.length > 0 && (
         <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-2">
-            <CheckSquare className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-sm font-medium text-emerald-900 dark:text-emerald-300">
-              {selectedIds.length} suplido{selectedIds.length > 1 ? 's' : ''} seleccionado{selectedIds.length > 1 ? 's' : ''}
-            </span>
+            <CheckSquare className="w-5 h-5 text-emerald-600" />
+            <span className="text-sm font-medium text-emerald-900 dark:text-emerald-300">{selectedIds.length} seleccionado{selectedIds.length > 1 ? 's' : ''}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-emerald-600/70 dark:text-emerald-400/70 mr-1">Cambiar estado a:</span>
-            <button onClick={() => handleBulkChange('Abonado')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50">
-              Abonado
-            </button>
-            <button onClick={() => handleBulkChange('Pendiente')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50">
-              Pendiente
-            </button>
+            <span className="text-xs text-emerald-600/70 mr-1">Cambiar a:</span>
+            <button onClick={() => handleBulkEstado('Pagada')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg disabled:opacity-50">Pagada</button>
+            <button onClick={() => handleBulkEstado('Pendiente')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg disabled:opacity-50">Pendiente</button>
+            {role === 'administracion' && (
+              <button onClick={() => setConfirmBulkDelete(true)} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center gap-1 disabled:opacity-50">
+                <Trash2 className="w-3 h-3" /> Borrar
+              </button>
+            )}
           </div>
         </div>
       )}
 
+      {/* Table */}
       <div className="bg-white dark:bg-[#0a0a0a] rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
+          <table className="w-full text-left border-collapse text-sm" style={{ tableLayout: 'fixed' }}>
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-800 text-gray-500 bg-gray-50/50 dark:bg-white/5">
-                <th className="py-4 px-4 w-12">
-                  <input type="checkbox" 
+                <th className="py-2 px-3 w-11">
+                  <input type="checkbox"
                     checked={filtered.length > 0 && selectedIds.length === filtered.length}
                     onChange={e => setSelectedIds(e.target.checked ? filtered.map(f => f.id) : [])}
                     className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" />
                 </th>
-                <th className="py-4 font-medium px-4">Nº Rec.</th>
-                <th className="py-4 font-medium px-4">Fecha</th>
-                <th className="py-4 font-medium px-4">Proveedor</th>
-                <th className="py-4 font-medium px-4">Nº Expediente</th>
-                <th className="py-4 font-medium px-4">Cliente</th>
-                <th className="py-4 font-medium px-4">Tipo</th>
-                <th className="py-4 font-medium px-4">Importe</th>
-                <th className="py-4 font-medium px-4">Estado</th>
-                <th className="py-4 font-medium px-4 text-right">Doc</th>
+                {COLS.map(([col, label]) => (
+                  <th key={col} style={{ minWidth: widths[col], width: widths[col] }}
+                    className="py-2 px-3 font-medium relative group/th whitespace-nowrap overflow-hidden text-ellipsis">
+                    {label}
+                    <ResizeHandle col={col} onMouseDown={onMouseDown} />
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-gray-100 dark:divide-gray-800">
               {filtered.length === 0 && (
-                <tr><td colSpan={9} className="py-12 text-center text-gray-500">No se encontraron suplidos con esos filtros.</td></tr>
+                <tr><td colSpan={COLS.length + 1} className="py-12 text-center text-gray-500">No se encontraron suplidos con esos filtros.</td></tr>
               )}
-              {filtered.map((inv) => (
-                <tr key={inv.id} onDoubleClick={() => router.push(`/facturas/${inv.id}`)}
-                  className={`hover:bg-emerald-50/30 dark:hover:bg-emerald-500/5 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-emerald-50/40 dark:bg-emerald-500/10' : ''}`} title="Doble clic para ver detalle">
-                  <td className="py-4 px-4" onClick={e => e.stopPropagation()}>
-                    <input type="checkbox" 
-                      checked={selectedIds.includes(inv.id)}
-                      onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
-                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" />
-                  </td>
-                  <td className="py-4 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">Fc. Rec.-{String(inv.id).padStart(4, '0')}</td>
-                  <td className="py-4 px-4 text-gray-500">
-                    <div className="flex items-center gap-1.5"><Calendar className="w-3 h-3" />{inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}</div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
-                        <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+              {filtered.map((inv) => {
+                const deudaCliente = (Number(inv.importe) || 0) + (Number(inv.total_irpf) || 0);
+                return (
+                  <tr key={inv.id} className={`hover:bg-emerald-50/30 dark:hover:bg-emerald-500/5 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-emerald-50/40 dark:bg-emerald-500/10' : ''}`}>
+                    <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
+                      <input type="checkbox"
+                        checked={selectedIds.includes(inv.id)}
+                        onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
+                        className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer" />
+                    </td>
+                    <td className="py-2 px-3 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs whitespace-nowrap overflow-hidden text-ellipsis">
+                      Fc.Rec.-{String(inv.id).padStart(4, '0')}
+                    </td>
+                    <td className="py-2 px-3 text-gray-500 text-xs whitespace-nowrap">
+                      {inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}
+                    </td>
+                    <td className="py-2 px-3 font-medium text-gray-900 dark:text-white whitespace-nowrap overflow-hidden text-ellipsis">
+                      {inv.nombre_proveedor || inv.cliente || '—'}
+                    </td>
+                    <td className="py-2 px-3" onClick={e => e.stopPropagation()}><EditableCell id={inv.id} field="num_expediente" value={inv.num_expediente} placeholder="Añadir exp..." /></td>
+                    <td className="py-2 px-3" onClick={e => e.stopPropagation()}><EditableCell id={inv.id} field="cliente_expediente" value={inv.cliente_expediente} placeholder="Añadir cliente..." /></td>
+                    <td className="py-2 px-3" onClick={e => e.stopPropagation()}><TipoSelect id={inv.id} initialTipo={inv.tipo} /></td>
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300 text-xs">{fmt(inv.total_base)}</td>
+                    <td className="py-2 px-3 text-gray-500 text-xs">{fmt(inv.total_iva)}</td>
+                    <td className="py-2 px-3 text-gray-500 text-xs">{pct(inv.total_iva, inv.total_base)}</td>
+                    <td className="py-2 px-3 text-gray-500 text-xs">{inv.total_irpf ? fmt(inv.total_irpf) : '—'}</td>
+                    <td className="py-2 px-3 text-gray-500 text-xs">{pct(inv.total_irpf, inv.total_base)}</td>
+                    <td className="py-2 px-3 font-bold text-gray-900 dark:text-white text-xs">{fmt(inv.importe)}</td>
+                    <td className="py-2 px-3 font-bold text-violet-700 dark:text-violet-400 text-xs">{fmt(deudaCliente)}</td>
+                    <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
+                      <EstadoSelect id={inv.id} initialEstado={inv.estado || 'Pendiente'} context="suplido" />
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex items-center justify-end gap-1">
+                        {(inv.file_url || inv.archivo_url) ? (
+                          <a href={inv.file_url || inv.archivo_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1.5 text-gray-400 hover:text-emerald-600 transition-colors rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        ) : (
+                          <span className="p-1.5 text-gray-200 dark:text-gray-800"><ExternalLink className="w-4 h-4" /></span>
+                        )}
+                        <button onClick={e => { e.stopPropagation(); setConfirmModal({ id: inv.id }); }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                      <span className="font-medium text-gray-900 dark:text-white">{inv.nombre_proveedor || inv.cliente || '—'}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4"><EditableCell id={inv.id} field="num_expediente" value={inv.num_expediente} placeholder="Añadir exp..." /></td>
-                  <td className="py-4 px-4"><EditableCell id={inv.id} field="cliente_expediente" value={inv.cliente_expediente} placeholder="Añadir cliente..." /></td>
-                  <td className="py-4 px-4"><TipoSelect id={inv.id} initialTipo={inv.tipo} /></td>
-                  <td className="py-4 px-4 font-bold text-gray-900 dark:text-white">{inv.importe != null ? fmt(Number(inv.importe)) : '—'}</td>
-                  <td className="py-4 px-4" onClick={e => e.stopPropagation()}>
-                    <EstadoSelect id={inv.id} initialEstado={inv.estado || 'Pendiente'} context="suplido" />
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    {(inv.file_url || inv.archivo_url) ? (
-                      <a href={inv.file_url || inv.archivo_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex p-2 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-500/10">
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    ) : (
-                      <span className="inline-flex p-2 text-gray-200 dark:text-gray-800"><ExternalLink className="w-4 h-4" /></span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Single delete confirm */}
+      {confirmModal && (
+        <ConfirmDeleteModal
+          title="¿Mover suplido a la papelera?"
+          message="El suplido se moverá a la papelera. Podrás restaurarlo desde ahí."
+          confirmLabel="Sí, mover"
+          onConfirm={async () => { await moverAPapeleraClient(confirmModal.id); setConfirmModal(null); router.refresh(); }}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
+
+      {/* Bulk delete confirm */}
+      {confirmBulkDelete && (
+        <ConfirmDeleteModal
+          title={`¿Mover ${selectedIds.length} suplidos a la papelera?`}
+          message="Todos los seleccionados se moverán a la papelera."
+          confirmLabel="Sí, mover todos"
+          onConfirm={handleBulkDelete}
+          onClose={() => setConfirmBulkDelete(false)}
+        />
+      )}
     </div>
   );
 }
