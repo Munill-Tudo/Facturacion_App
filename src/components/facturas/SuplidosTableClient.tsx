@@ -206,7 +206,7 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
             <span className="text-xs text-emerald-600/70 mr-1">Cambiar a:</span>
             <button onClick={() => handleBulkEstado('Pagada')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg disabled:opacity-50">Pagada</button>
             <button onClick={() => handleBulkEstado('Pendiente')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg disabled:opacity-50">Pendiente</button>
-            {role === 'administracion' && (
+            {role && (
               <button onClick={() => setConfirmBulkDelete(true)} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center gap-1 disabled:opacity-50">
                 <Trash2 className="w-3 h-3" /> Borrar
               </button>
@@ -241,7 +241,7 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
                 <tr><td colSpan={COLS.length + 1} className="py-12 text-center text-gray-500">No se encontraron suplidos con esos filtros.</td></tr>
               )}
               {filtered.map((inv) => {
-                const deudaCliente = (Number(inv.importe) || 0) + (Number(inv.total_irpf) || 0);
+                const deudaCliente = (Number(inv.importe) || 0) + Math.abs(Number(inv.total_irpf) || 0);
                 return (
                   <tr key={inv.id} className={`hover:bg-emerald-50/30 dark:hover:bg-emerald-500/5 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-emerald-50/40 dark:bg-emerald-500/10' : ''}`}>
                     <td className="py-2 px-3" onClick={e => e.stopPropagation()}>
