@@ -100,9 +100,10 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
     });
   }, [data, search, filterEstado, periodMode, dateFrom, dateTo, selYear, selMonth, selQ]);
 
-  const totalImporte = filtered.reduce((s, i) => s + (Number(i.importe) || 0), 0);
-  const totalPendiente = filtered.filter(i => i.estado === 'Pendiente').reduce((s, i) => s + (Number(i.importe) || 0), 0);
-  const totalDeuda = filtered.reduce((s, i) => s + (Number(i.importe) || 0) + (Number(i.total_irpf) || 0), 0);
+  const deuda = (inv: any) => (Number(inv.importe) || 0) + Math.abs(Number(inv.total_irpf) || 0);
+  const totalImporte = filtered.reduce((s, i) => s + deuda(i), 0);
+  const totalPendiente = filtered.filter(i => i.estado === 'Pendiente').reduce((s, i) => s + deuda(i), 0);
+  const totalDeuda = totalImporte;
 
   const COLS: [string, string][] = [
     ['num_rec', 'Nº Rec.'], ['fecha', 'Fecha'], ['proveedor', 'Proveedor'],
@@ -118,7 +119,7 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
       {/* Totals */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="p-4 rounded-2xl border border-emerald-100 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-500/5">
-          <p className="text-xs text-gray-500 mb-1">Total Suplidos</p>
+          <p className="text-xs text-gray-500 mb-1">Deuda Total Clientes</p>
           <p className="font-bold text-emerald-700 dark:text-emerald-300">{fmt(totalImporte)}</p>
         </div>
         <div className="p-4 rounded-2xl border border-orange-100 dark:border-orange-800/30 bg-orange-50/50 dark:bg-orange-500/5">
@@ -126,8 +127,8 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
           <p className="font-bold text-orange-600 dark:text-orange-400">{fmt(totalPendiente)}</p>
         </div>
         <div className="p-4 rounded-2xl border border-violet-100 dark:border-violet-800/30 bg-violet-50/50 dark:bg-violet-500/5">
-          <p className="text-xs text-gray-500 mb-1">Deuda Total Clientes</p>
-          <p className="font-bold text-violet-700 dark:text-violet-400">{fmt(totalDeuda)}</p>
+          <p className="text-xs text-gray-500 mb-1">Suplidos abonados</p>
+          <p className="font-bold text-violet-700 dark:text-violet-400">{fmt(totalImporte - totalPendiente)}</p>
         </div>
       </div>
 

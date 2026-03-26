@@ -15,7 +15,9 @@ export default async function SuplidosList() {
     .order('created_at', { ascending: false });
 
   const facturasData = invoices || [];
-  const pendingAmount = facturasData.filter(i => i.estado === 'Pendiente').reduce((acc, curr) => acc + (Number(curr.importe) || 0), 0);
+  const pendingAmount = facturasData
+    .filter(i => i.estado === 'Pendiente')
+    .reduce((acc, curr) => acc + (Number(curr.importe) || 0) + Math.abs(Number(curr.total_irpf) || 0), 0);
   const pendingCount = facturasData.filter(i => i.estado === 'Pendiente').length;
 
   return (
