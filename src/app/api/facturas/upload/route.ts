@@ -74,12 +74,18 @@ export async function POST(request: Request) {
 
     // 2. Subir archivo a Google Drive mediante n8n (o Supabase Storage como fallback)
     let archivo_url = null;
+    let n8nError: string | null = null;
     const n8nDriveWebhook = process.env.N8N_DRIVE_WEBHOOK_URL;
 
     if (n8nDriveWebhook) {
       try {
+        // Creamos un nuevo File desde el buffer ya leído para asegurar que es legible
+        const fileForN8n = new File([buffer], file.name || 'factura.pdf', {
+          type: file.type || 'application/pdf',
+        });
+
         const driveFormData = new FormData();
-        driveFormData.append('file', file);
+        driveFormData.append('file', fileForN8n);
         driveFormData.append('data', JSON.stringify(extractedData));
 
         const n8nRes = await fetch(n8nDriveWebhook, {
@@ -91,9 +97,11 @@ export async function POST(request: Request) {
           const n8nData = await n8nRes.json();
           archivo_url = n8nData.archivo_url || null;
         } else {
-          console.error('El webhook de n8n devolvió un error:', await n8nRes.text());
+          n8nError = `Status ${n8nRes.status}: ${await n8nRes.text()}`;
+          console.error('El webhook de n8n devolvió un error:', n8nError);
         }
-      } catch (err) {
+      } catch (err: any) {
+        n8nError = err.message;
         console.error('Error enviando el archivo al webhook de n8n para Drive:', err);
       }
     } else {
