@@ -1,24 +1,27 @@
 'use client';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 /**
  * Resizable columns hook with localStorage persistence.
- * @param storageKey - unique key per table (e.g. 'cols_facturas')
- * @param initialWidths - default column widths in px
+ * localStorage is loaded AFTER hydration (in useEffect) to prevent SSR mismatch.
  */
 export function useResizableColumns(
   storageKey: string,
   initialWidths: Record<string, number>
 ) {
-  const [widths, setWidths] = useState<Record<string, number>>(() => {
-    if (typeof window === 'undefined') return initialWidths;
+  // Always start with initialWidths (both server and client) — avoids hydration mismatch
+  const [widths, setWidths] = useState<Record<string, number>>(initialWidths);
+
+  // After mount, restore saved widths from localStorage
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(storageKey);
-      return stored ? { ...initialWidths, ...JSON.parse(stored) } : initialWidths;
-    } catch {
-      return initialWidths;
-    }
-  });
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setWidths(prev => ({ ...prev, ...parsed }));
+      }
+    } catch {}
+  }, [storageKey]);
 
   const dragRef = useRef<{ startX: number; startW: number; col: string } | null>(null);
 
