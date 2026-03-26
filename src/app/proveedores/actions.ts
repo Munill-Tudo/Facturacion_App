@@ -2,25 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
-
-/**
- * Normaliza un NIF/CIF español al formato estándar CON guión entre letra y números.
- * Ejemplos: "B44650307" → "B-44650307" | "12345678A" → "12345678-A" | "B-44650307" → "B-44650307"
- */
-export function normalizarNIF(nif: string): string {
-  const raw = nif.toUpperCase().replace(/[\s-]/g, ''); // quitar espacios y guiones
-  // CIF/NIF tipo letra + números: B12345678 → B-12345678
-  if (/^[A-Z]\d+$/.test(raw)) return `${raw[0]}-${raw.slice(1)}`;
-  // NIF tipo números + letra: 12345678A → 12345678-A
-  if (/^\d+[A-Z]$/.test(raw)) return `${raw.slice(0, -1)}-${raw.slice(-1)}`;
-  // Formato desconocido o ya correcto: devolver en mayúsculas sin espacios
-  return raw;
-}
-
-/** Devuelve el NIF sin ningún guión (para búsquedas flexibles) */
-function nifRaw(nif: string): string {
-  return nif.toUpperCase().replace(/[\s-]/g, '');
-}
+import { normalizarNIF, nifRaw } from "@/lib/nif";
 
 export type Proveedor = {
   id: string;
