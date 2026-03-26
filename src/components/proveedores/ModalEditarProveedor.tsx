@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Proveedor, guardarProveedor } from '@/app/proveedores/actions';
+import { Proveedor, guardarProveedor, eliminarProveedor } from '@/app/proveedores/actions';
 import { getFacturasDeProveedor } from '@/app/proveedores/dashboardActions';
-import { X, Save, Building2, MapPin, Phone, Mail, CreditCard, LayoutDashboard, FileText, Calendar, Filter, CheckCircle2 } from 'lucide-react';
+import { X, Save, Building2, MapPin, Phone, Mail, CreditCard, LayoutDashboard, FileText, Calendar, Filter, CheckCircle2, Trash2 } from 'lucide-react';
+import { ConfirmDeleteModal } from '@/components/ui/ConfirmDeleteModal';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 const fmt = (v: number) => `€ ${Number(v || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
 
@@ -14,9 +16,11 @@ export function ModalEditarProveedor({
   onClose: () => void, 
   onSave: () => void 
 }) {
+  const { role } = useAuth();
   const [formData, setFormData] = useState<Partial<Proveedor>>(proveedor || {});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   
   // Dashboard & Tabs State
   const [activeTab, setActiveTab] = useState<'dashboard' | 'editar'>(proveedor?.id ? 'dashboard' : 'editar');
@@ -300,15 +304,42 @@ export function ModalEditarProveedor({
 
         {/* FOOTER ACTIONS ONLY IN EDIT MODE OR IF NEW */}
         {(activeTab === 'editar' || isNew) && (
-          <div className="p-5 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 bg-gray-50/50 dark:bg-white/5">
-            <button type="button" onClick={onClose} disabled={isSubmitting} className="px-5 py-2.5 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors font-bold text-sm">
-              Cancelar
-            </button>
-            <button type="submit" form="proveedor-form" disabled={isSubmitting} className="px-6 py-2.5 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20 font-bold flex items-center gap-2 transition-all disabled:opacity-50">
-              <Save className="w-4 h-4" />
-              {isSubmitting ? 'Guardando...' : 'Guardar Ficha del Proveedor'}
-            </button>
+          <div className="p-5 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center gap-3 bg-gray-50/50 dark:bg-white/5">
+            {/* DELETE — only Dirección, only existing providers */}
+            {!isNew && role === 'administracion' && (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 border border-red-200 dark:border-red-500/30 font-semibold transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Mover a Papelera
+              </button>
+            )}
+            <div className="flex items-center gap-3 ml-auto">
+              <button type="button" onClick={onClose} disabled={isSubmitting} className="px-5 py-2.5 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors font-bold text-sm">
+                Cancelar
+              </button>
+              <button type="submit" form="proveedor-form" disabled={isSubmitting} className="px-6 py-2.5 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/20 font-bold flex items-center gap-2 transition-all disabled:opacity-50">
+                <Save className="w-4 h-4" />
+                {isSubmitting ? 'Guardando...' : 'Guardar Ficha del Proveedor'}
+              </button>
+            </div>
           </div>
+        )}
+
+        {/* Confirm delete modal */}
+        {confirmDelete && (
+          <ConfirmDeleteModal
+            title="¿Mover proveedor a la papelera?"
+            message={`El proveedor "${formData.nombre}" se moverá a la papelera. Podrás restaurarlo o eliminarlo definitivamente desde ahí.`}
+            confirmLabel="Sí, mover a Papelera"
+            onConfirm={async () => {
+              if (proveedor?.id) await eliminarProveedor(proveedor.id);
+              onSave();
+            }}
+            onClose={() => setConfirmDelete(false)}
+          />
         )}
       </div>
     </div>

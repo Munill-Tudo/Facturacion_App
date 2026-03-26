@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Search, Hash, Building2, ExternalLink, Trash2, ChevronDown, CheckSquare } from 'lucide-react';
+import { useState, useMemo, useRef, useCallback } from 'react';
+import { Search, Hash, Building2, ExternalLink, Trash2, ChevronDown, CheckSquare, GripVertical } from 'lucide-react';
 import { TipoSelect } from '@/components/facturas/TipoSelect';
 import { EstadoSelect } from '@/components/facturas/EstadoSelect';
+import { TipoGastoSelect } from '@/components/facturas/TipoGastoSelect';
 import { moverAPapeleraClient, bulkUpdateFacturaEstado } from '@/app/facturas/actions';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -29,6 +30,35 @@ interface Factura {
   nif_proveedor?: string; poblacion_proveedor?: string;
   tipo?: string; total_base?: number; total_iva?: number; total_irpf?: number;
   importe?: number; estado?: string; file_url?: string; archivo_url?: string;
+  tipo_gasto?: string; subtipo_gasto?: string; numero_recepcion?: string;
+}
+
+// --- Resizable columns hook ---
+function useResizableColumns(initialWidths: Record<string, number>) {
+  const [widths, setWidths] = useState(initialWidths);
+  const startX = useRef(0);
+  const startW = useRef(0);
+  const currentCol = useRef('');
+
+  const onMouseDown = useCallback((col: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    startX.current = e.clientX;
+    startW.current = widths[col] ?? 120;
+    currentCol.current = col;
+
+    const onMove = (mv: MouseEvent) => {
+      const diff = mv.clientX - startX.current;
+      setWidths(prev => ({ ...prev, [currentCol.current]: Math.max(60, startW.current + diff) }));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [widths]);
+
+  return { widths, onMouseDown };
 }
 
 export function FacturasTable({ data }: { data: Factura[] }) {
@@ -47,6 +77,24 @@ export function FacturasTable({ data }: { data: Factura[] }) {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBulking, setIsBulking] = useState(false);
   const [editingFactura, setEditingFactura] = useState<any>(null);
+
+  const { widths, onMouseDown } = useResizableColumns({
+    num_rec: 110, num_fac: 100, fecha: 90, proveedor: 180,
+    nif: 110, tipo_gasto: 160, tipo: 90, poblacion: 110,
+    base: 90, iva: 80, pct_iva: 70, irpf: 80, pct_irpf: 72, total: 90,
+    estado: 110, acciones: 80,
+  });
+
+  // Resize handle helper
+  const ResizeHandle = ({ col }: { col: string }) => (
+    <span
+      onMouseDown={e => onMouseDown(col, e)}
+      className="absolute right-0 top-0 h-full w-2 cursor-col-resize flex items-center justify-center opacity-0 group-hover/th:opacity-60 hover:!opacity-100 select-none z-10"
+      title="Arrastrar para cambiar ancho"
+    >
+      <GripVertical className="w-3 h-3 text-gray-400" />
+    </span>
+  );
 
   const handleBulkChange = async (estado: string) => {
     if (!selectedIds.length) return;
@@ -239,17 +287,33 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                     onChange={e => setSelectedIds(e.target.checked ? filtered.map(f => f.id) : [])}
                     className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
                 </th>
-                <th className="py-3 font-medium px-4">Nº Fac. Recibida</th>
-                <th className="py-3 font-medium px-4">Nº Factura</th>
-                <th className="py-3 font-medium px-4">Fecha</th>
-                <th className="py-3 font-medium px-4">Proveedor</th>
-                <th className="py-3 font-medium px-4">NIF</th>
-                <th className="py-3 font-medium px-4">Tipo</th>
-                <th className="py-3 font-medium px-4">Población</th>
-                <th className="py-3 font-medium px-4">Base</th>
-                <th className="py-3 font-medium px-4">Total</th>
-                <th className="py-3 font-medium px-4">Estado</th>
-                <th className="py-3 font-medium px-4 text-right">Acciones</th>
+                {([
+                  ['num_rec',   'Nº Fac. Recibida'],
+                  ['num_fac',   'Nº Factura'],
+                  ['fecha',     'Fecha'],
+                  ['proveedor', 'Proveedor'],
+                  ['nif',       'NIF'],
+                  ['tipo_gasto','Tipo de Gasto'],
+                  ['tipo',      'Tipo'],
+                  ['poblacion', 'Población'],
+                  ['base',      'Base'],
+                  ['iva',       'IVA (€)'],
+                  ['pct_iva',   'IVA %'],
+                  ['irpf',      'IRPF (€)'],
+                  ['pct_irpf',  'IRPF %'],
+                  ['total',     'Total'],
+                  ['estado',    'Estado'],
+                  ['acciones',  'Acciones'],
+                ] as [string, string][]).map(([col, label]) => (
+                  <th
+                    key={col}
+                    style={{ minWidth: widths[col], width: widths[col] }}
+                    className="py-3 font-medium px-4 relative group/th whitespace-nowrap"
+                  >
+                    {label}
+                    <ResizeHandle col={col} />
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -265,7 +329,9 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                       onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
                       className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
                   </td>
-                  <td className="py-3 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">Fc. Rec.-{String(inv.id).padStart(4, '0')}</td>
+                  <td className="py-3 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">
+                    {inv.numero_recepcion || `Fc. Rec.-${String(inv.id).padStart(4, '0')}`}
+                  </td>
                   <td className="py-3 px-4 font-mono font-medium text-indigo-600 dark:text-indigo-400">
                     <div className="flex items-center gap-1.5"><Hash className="w-3 h-3" />{inv.numero || <span className="text-gray-400 text-xs">—</span>}</div>
                   </td>
@@ -281,9 +347,20 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                     </div>
                   </td>
                   <td className="py-3 px-4 font-mono text-gray-500 text-xs">{inv.nif_proveedor || '—'}</td>
+                  <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
+                    <TipoGastoSelect id={inv.id} initialTipoGasto={inv.tipo_gasto} initialSubtipoGasto={inv.subtipo_gasto} />
+                  </td>
                   <td className="py-3 px-4"><TipoSelect id={inv.id} initialTipo={inv.tipo} /></td>
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400 text-xs">{inv.poblacion_proveedor || '—'}</td>
                   <td className="py-3 px-4 text-gray-700 dark:text-gray-300">{inv.total_base != null ? fmt(Number(inv.total_base)) : '—'}</td>
+                  <td className="py-3 px-4 text-gray-500 text-xs">{inv.total_iva != null ? fmt(Number(inv.total_iva)) : '—'}</td>
+                  <td className="py-3 px-4 text-gray-500 text-xs">
+                    {inv.total_iva != null && inv.total_base ? `${((inv.total_iva / inv.total_base) * 100).toFixed(0)}%` : '—'}
+                  </td>
+                  <td className="py-3 px-4 text-gray-500 text-xs">{inv.total_irpf != null && inv.total_irpf !== 0 ? fmt(Number(inv.total_irpf)) : '—'}</td>
+                  <td className="py-3 px-4 text-gray-500 text-xs">
+                    {inv.total_irpf != null && inv.total_irpf !== 0 && inv.total_base ? `${((inv.total_irpf / inv.total_base) * 100).toFixed(0)}%` : '—'}
+                  </td>
                   <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{inv.importe != null ? fmt(Number(inv.importe)) : '—'}</td>
                   <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
                     <EstadoSelect id={inv.id} initialEstado={inv.estado || 'Pendiente'} context="factura" />
