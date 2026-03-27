@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, Settings, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt, BarChart3 } from "lucide-react";
+import { LayoutDashboard, FileText, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt, BarChart3, Settings, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean, setIsCollapsed: (val: boolean) => void }) {
@@ -52,7 +52,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
         {!isCollapsed && (
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Sistema</p>
         )}
-        <NavItem href="/settings" icon={<Settings className="w-5 h-5 shrink-0" />} label="Ajustes" isCollapsed={isCollapsed} active={pathname === '/settings'} />
+        <NavItem href="/ajustes" icon={<SlidersHorizontal className="w-5 h-5 shrink-0" />} label="Ajustes" isCollapsed={isCollapsed} active={pathname === '/ajustes'} />
       </nav>
 
       {/* User Footer */}
@@ -70,7 +70,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
         </div>
         {!isCollapsed && (
           <p className="mt-3 text-center text-[10px] font-mono text-gray-300 dark:text-gray-700 select-none">
-            v1.002
+            v1.012
           </p>
         )}
       </div>
