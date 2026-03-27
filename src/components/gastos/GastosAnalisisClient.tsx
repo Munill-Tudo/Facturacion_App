@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import { TipoGasto } from '@/lib/tipos-gasto';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Settings2 } from 'lucide-react';
+import { GestionTiposModal } from './GestionTiposModal';
 
 const fmt = (v: number) => `€ ${v.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
 
@@ -29,6 +30,7 @@ export function GastosAnalisisClient({ facturas, tipos }: { facturas: Factura[];
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filterTipo, setFilterTipo] = useState('');
+  const [showManage, setShowManage] = useState(false);
 
   const años = useMemo(() => {
     const ys = new Set(facturas.map(f => f.fecha ? new Date(f.fecha).getFullYear().toString() : '').filter(Boolean));
@@ -137,15 +139,26 @@ export function GastosAnalisisClient({ facturas, tipos }: { facturas: Factura[];
             </>
           )}
           {/* Filter by tipo */}
-          <div className="relative ml-auto">
+          <div className="relative">
             <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)} className="pl-3 pr-8 py-1.5 text-sm border border-violet-200 dark:border-violet-500/30 rounded-xl bg-violet-50 dark:bg-violet-500/10 text-violet-700 outline-none appearance-none cursor-pointer">
               <option value="">Todos los tipos</option>
               {tipos.map(t => <option key={t.valor} value={t.valor}>{t.etiqueta}</option>)}
             </select>
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-violet-400 pointer-events-none" />
           </div>
+
+          <button 
+            onClick={() => setShowManage(true)}
+            className="p-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-gray-800 rounded-xl text-gray-500 hover:text-violet-600 hover:border-violet-200 transition-all flex items-center gap-2"
+            title="Gestionar tipos y subtipos"
+          >
+            <Settings2 className="w-4 h-4" />
+            <span className="text-xs font-semibold hidden md:inline">Gestionar</span>
+          </button>
         </div>
       </div>
+
+      {showManage && <GestionTiposModal tipos={tipos as any} onClose={() => setShowManage(false)} />}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

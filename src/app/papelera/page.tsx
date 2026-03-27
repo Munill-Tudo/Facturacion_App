@@ -2,6 +2,8 @@ import { supabase } from "@/lib/supabase";
 import { FileText, Building2, Calendar, Hash, RefreshCcw, Trash2, Users } from "lucide-react";
 import { revalidatePath } from "next/cache";
 import { getProveedoresEliminados } from "@/app/proveedores/actions";
+import { getUserRole } from "@/lib/auth";
+import { VaciarPapeleraBtn } from "@/components/papelera/VaciarPapeleraBtn";
 
 async function restaurarFactura(id: number) {
   'use server'
@@ -32,6 +34,7 @@ async function eliminarProveedorDefinitivoAction(id: string) {
 }
 
 export default async function PapeleraList() {
+  const role = await getUserRole();
   const { data: invoices, error } = await supabase
     .from('facturas')
     .select('*')
@@ -45,14 +48,17 @@ export default async function PapeleraList() {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-500 flex items-center gap-3">
-          <Trash2 className="w-8 h-8" />
-          Papelera
-        </h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Los elementos eliminados se guardan aquí hasta que Dirección los elimine definitivamente.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-red-600 dark:text-red-500 flex items-center gap-3">
+            <Trash2 className="w-8 h-8" />
+            Papelera
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            Los elementos eliminados se guardan aquí hasta que Dirección los elimine definitivamente.
+          </p>
+        </div>
+        <VaciarPapeleraBtn role={role} />
       </div>
 
       {/* FACTURAS ELIMINADAS */}

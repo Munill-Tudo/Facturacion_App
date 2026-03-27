@@ -9,6 +9,7 @@ export function NotificationsMenu() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const prevIdsRef = useRef<Set<string>>(new Set());
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -68,11 +69,25 @@ export function NotificationsMenu() {
     // Sort by time descending
     notifs.sort((a, b) => b.time.getTime() - a.time.getTime());
     
+    // Check for NEW notifications to trigger OS notification
+    const newItems = notifs.filter(n => !prevIdsRef.current.has(n.id));
+    if (newItems.length > 0 && prevIdsRef.current.size > 0) {
+      newItems.forEach(n => {
+        if (Notification.permission === 'granted') {
+          new Notification(n.title, { body: n.desc, icon: '/favicon.ico' });
+        }
+      });
+    }
+    prevIdsRef.current = new Set(notifs.map(n => n.id));
+
     setNotifications(notifs.slice(0, 10)); // Mostrar las últimas 10
     setUnreadCount(notifs.filter(n => !n.read).length);
   };
 
   useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
     fetchNotifications();
     // Simular un polling cada 1 minuto
     const interval = setInterval(fetchNotifications, 60000);
