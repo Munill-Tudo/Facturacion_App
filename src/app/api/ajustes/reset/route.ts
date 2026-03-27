@@ -42,12 +42,12 @@ export async function POST(request: Request) {
       // We need to use the Supabase admin RPC or raw SQL
       // This sets the next value of the sequence to nuevoNumero
       const startFrom = Number(nuevoNumero);
+      // is_called = false → next generated ID will be exactly startFrom
       const { error: seqErr } = await supabase.rpc('reset_facturas_sequence', { next_val: startFrom });
       if (seqErr) {
-        // If RPC not available, return a message telling user to run SQL manually
         return NextResponse.json({ 
           success: true, 
-          sequenceWarning: `Datos eliminados. Para cambiar el número inicial a ${startFrom}, ejecuta en Supabase SQL Editor:\n\nSELECT setval('facturas_id_seq', ${startFrom - 1}, true);` 
+          sequenceWarning: `Datos eliminados. Para que la siguiente factura sea Fc.Rec.-${String(startFrom).padStart(4,'0')}, ejecuta en Supabase SQL Editor:\n\nSELECT setval('facturas_id_seq', ${startFrom}, false);` 
         });
       }
     }
