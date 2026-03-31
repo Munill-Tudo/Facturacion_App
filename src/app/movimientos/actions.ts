@@ -92,27 +92,62 @@ function palabrasSignificativas(nombre: string): string[] {
  * - 100 pts: nombre completo del proveedor encontrado en el texto del banco
  * - 30 pts por cada palabra significativa del proveedor encontrada
  * - Se busca en: concepto + beneficiario + observaciones
+ * - Nivel Aprendizaje Automático: +500 si el texto encaja con un movimiento pasado previamente asignado a este proveedor.
  */
-function calcularScore(mov: any, factura: any): number {
-  const textoBanco = normalizar(
+function calcularScore(mov: any, factura: any, historicoMap?: Map<string, string[]>): number {
+  const normalBankFull = normalizar(
     [mov.concepto, mov.beneficiario, mov.observaciones].filter(Boolean).join(' ')
   );
-
-  const nombreProv = normalizar(factura.nombre_proveedor || factura.cliente || '');
+  
+  const rawProvName = factura.nombre_proveedor || factura.cliente || '';
+  const nombreProv = normalizar(rawProvName);
 
   if (!nombreProv || nombreProv.length < 3) return 0;
 
-  // Match completo del nombre del proveedor
-  if (textoBanco.includes(nombreProv)) return 100;
-
-  // Match por palabras significativas
-  const palabras = palabrasSignificativas(factura.nombre_proveedor || factura.cliente || '');
-  if (palabras.length === 0) return 0;
-
   let score = 0;
-  for (const p of palabras) {
-    if (textoBanco.includes(p)) score += 30;
+
+  // Match completo del nombre del proveedor
+  if (normalBankFull.includes(nombreProv)) {
+    score += 100;
+  } else {
+    // Match por palabras significativas
+    const palabras = palabrasSignificativas(rawProvName);
+    if (palabras.length > 0) {
+      for (const p of palabras) {
+        if (normalBankFull.includes(p)) score += 30;
+      }
+    }
   }
+
+  // --- Auto-Aprendizaje Histórico ---
+  if (historicoMap && historicoMap.has(nombreProv)) {
+    const pastBankTexts = historicoMap.get(nombreProv)!;
+    
+    // Extraemos texto limpio del movimiento actual (beneficiario + concepto prioritarios)
+    const curBankClean = normalizar([mov.beneficiario, mov.concepto].filter(Boolean).join(' '));
+    const currentWords = curBankClean.split(/\s+/).filter(w => w.length >= 4 && !STOP_WORDS.has(w));
+
+    let matchedHist = false;
+    for (const pastStr of pastBankTexts) {
+      // 1. Coincidencia exacta (mismo beneficiario y concepto repetido, ej. recibo mensual identico)
+      if (curBankClean === pastStr) {
+        matchedHist = true; break;
+      }
+      
+      // 2. Coincidencia difusa histórica (comparten al menos 2 palabras clave, ej. "SEPA Vodafone" y "SEPA Vodafone Ene")
+      const pastWords = pastStr.split(/\s+/).filter(w => w.length >= 4 && !STOP_WORDS.has(w));
+      let common = 0;
+      for (const cw of currentWords) {
+        if (pastWords.includes(cw)) common++;
+      }
+      if (common >= 2) {
+        matchedHist = true; break;
+      }
+    }
+
+    if (matchedHist) score += 500;
+  }
+
   return score;
 }
 
@@ -142,6 +177,32 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
     if (facturasErr) throw facturasErr;
     if (!facturas || facturas.length === 0) return { conciliados: 0, errores: [] };
 
+    // 3. Obtener Histórico de Auto-Aprendizaje
+    // Buscamos movimientos pasados que ya tengan una factura vinculada
+    const { data: historial } = await supabase
+      .from('movimientos')
+      .select('concepto, beneficiario, facturas(nombre_proveedor, cliente)')
+      .eq('estado_conciliacion', 'Conciliado')
+      .not('factura_id', 'is', null);
+
+    const historicoMap = new Map<string, string[]>();
+    if (historial) {
+      for (const h of historial) {
+        const facs = h.facturas;
+        if (!facs) continue;
+        const facHist = Array.isArray(facs) ? facs[0] : facs;
+        if (!facHist) continue;
+        
+        const pName = normalizar(facHist.nombre_proveedor || facHist.cliente || '');
+        if (!pName) continue;
+        
+        // Guardamos la firma del banco normalizada (beneficiario + concepto)
+        const bankStr = normalizar([h.beneficiario, h.concepto].filter(Boolean).join(' '));
+        if (!historicoMap.has(pName)) historicoMap.set(pName, []);
+        historicoMap.get(pName)!.push(bankStr);
+      }
+    }
+
     // Copia mutable para marcar facturas ya usadas en esta sesión
     const facturasDisponibles = [...facturas];
 
@@ -160,9 +221,12 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
 
       if (candidatas.length === 1) {
         // — Caso A: única candidata con ese importe —
-        const score = calcularScore(mov, candidatas[0]);
+        const score = calcularScore(mov, candidatas[0], historicoMap);
 
-        if (score >= 30) {
+        if (score >= 500) {
+          facturaElegida = candidatas[0];
+          nivelConfianza = 'histórico';
+        } else if (score >= 30) {
           // Nivel 1/2: nombre coincide (completo o parcial)
           facturaElegida = candidatas[0];
           nivelConfianza = score >= 100 ? 'exacto' : 'fuzzy';
@@ -177,7 +241,7 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
         let mejorCandidatas: any[] = [];
 
         for (const c of candidatas) {
-          const score = calcularScore(mov, c);
+          const score = calcularScore(mov, c, historicoMap);
           if (score > mejorScore) {
             mejorScore = score;
             mejorCandidatas = [c];
@@ -191,7 +255,7 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
           // Si hay empate, cogemos la más antigua (menor ID)
           mejorCandidatas.sort((a, b) => a.id - b.id);
           facturaElegida = mejorCandidatas[0];
-          nivelConfianza = mejorScore >= 100 ? 'exacto' : 'fuzzy';
+          nivelConfianza = mejorScore >= 500 ? 'histórico' : (mejorScore >= 100 ? 'exacto' : 'fuzzy');
         }
         // Si hay empate o score=0 con múltiples candidatas → dejar para revisión manual
       }

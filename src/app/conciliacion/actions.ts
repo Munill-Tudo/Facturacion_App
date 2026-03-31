@@ -5,15 +5,25 @@ import { revalidatePath } from "next/cache";
 import { autoConciliarPagos } from "@/app/movimientos/actions";
 
 export async function asociarPagoAFactura(movimientoId: string, facturaId: number) {
-  // 1. Marcar movimiento como conciliado y enlazar factura
+  // 1. Obtener datos de la factura para rellenar el nombre en el movimiento
+  const { data: fac } = await supabase
+    .from('facturas')
+    .select('nombre_proveedor, cliente, num_expediente')
+    .eq('id', facturaId)
+    .single();
+
+  const clienteExp = fac ? (fac.num_expediente || fac.nombre_proveedor || fac.cliente || null) : null;
+
+  // 2. Marcar movimiento como conciliado y enlazar factura con el nombre guardado
   await supabase.from('movimientos')
     .update({ 
       estado_conciliacion: 'Conciliado', 
-      factura_id: facturaId 
+      factura_id: facturaId,
+      cliente_expediente: clienteExp
     })
     .eq('id', movimientoId);
 
-  // 2. Marcar factura como Pagada
+  // 3. Marcar factura como Pagada (Conciliada)
   await supabase.from('facturas')
     .update({ estado: 'Pagada' })
     .eq('id', facturaId);
