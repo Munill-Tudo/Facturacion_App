@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
+import { autoConciliarPagos } from "@/app/movimientos/actions";
 
 export async function asociarPagoAFactura(movimientoId: string, facturaId: number) {
   // 1. Marcar movimiento como conciliado y enlazar factura
@@ -31,4 +32,19 @@ export async function asignarCobroACliente(movimientoId: string, clienteExpedien
     .eq('id', movimientoId);
 
   revalidatePath('/conciliacion');
+}
+
+/**
+ * Lanza el motor de auto-conciliación sobre TODOS los pagos pendientes actuales.
+ * Útil para reprocesar movimientos ya existentes sin necesidad de volver a importarlos.
+ */
+export async function lanzarAutoConciliacion(): Promise<{ conciliados: number; errores: string[] }> {
+  const resultado = await autoConciliarPagos();
+
+  revalidatePath('/');
+  revalidatePath('/facturas');
+  revalidatePath('/conciliacion');
+  revalidatePath('/movimientos');
+
+  return resultado;
 }
