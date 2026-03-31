@@ -11,6 +11,7 @@ export default function MovimientosPage() {
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filterTipoMov, setFilterTipoMov] = useState<'Todos'|'Cobro'|'Pago'>('Todos');
   const [showImporter, setShowImporter] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -38,7 +39,9 @@ export default function MovimientosPage() {
 
   const filtered = movimientos.filter(m => {
     const q = search.toLowerCase();
-    return !q || (m.concepto || '').toLowerCase().includes(q) || (m.cliente_expediente || '').toLowerCase().includes(q);
+    const matchSearch = !q || (m.concepto || '').toLowerCase().includes(q) || (m.cliente_expediente || '').toLowerCase().includes(q);
+    const matchTipo = filterTipoMov === 'Todos' || m.tipo === filterTipoMov;
+    return matchSearch && matchTipo;
   });
 
   return (
@@ -52,7 +55,15 @@ export default function MovimientosPage() {
           <p className="text-gray-500 dark:text-gray-400 mt-1">El libro mayor de todas tus cuentas bancarias. Sube los extractos aquí.</p>
         </div>
         
-        <div className="shrink-0 flex gap-3">
+        <div className="shrink-0 flex items-center gap-3 flex-wrap justify-end">
+          <div className="flex bg-gray-50 dark:bg-black/50 p-1 rounded-2xl border border-gray-200 dark:border-gray-800 shrink-0">
+            {(['Todos', 'Cobro', 'Pago'] as const).map(t => (
+              <button key={t} onClick={() => setFilterTipoMov(t)}
+                className={`px-3 py-1.5 text-sm rounded-xl font-medium transition-all ${filterTipoMov === t ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}>
+                {t === 'Todos' ? 'Todos' : t === 'Cobro' ? 'Cobros (+)' : 'Pagos (-)'}
+              </button>
+            ))}
+          </div>
           <button 
             onClick={() => setShowImporter(true)}
             className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 font-bold text-sm"

@@ -186,8 +186,10 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
           }
         }
 
-        if (mejorScore >= 30 && mejorCandidatas.length === 1) {
-          // Ganador claro por nombre
+        if (mejorScore >= 30 && mejorCandidatas.length >= 1) {
+          // Ganador claro por nombre, o empate entre varias facturas del MISMO PROVEEDOR
+          // Si hay empate, cogemos la más antigua (menor ID)
+          mejorCandidatas.sort((a, b) => a.id - b.id);
           facturaElegida = mejorCandidatas[0];
           nivelConfianza = mejorScore >= 100 ? 'exacto' : 'fuzzy';
         }

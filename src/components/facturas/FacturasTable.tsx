@@ -196,7 +196,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
             <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)} className="pl-3 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 appearance-none cursor-pointer">
               <option value="">Todos los estados</option>
               <option value="Pendiente">Pendiente</option>
-              <option value="Pagada">Pagada</option>
+              <option value="Pagada">Conciliada</option>
             </select>
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
           </div>
@@ -225,7 +225,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
           <div className="flex items-center gap-2">
             <span className="text-xs text-indigo-600/70 dark:text-indigo-400/70 mr-1">Marcar como:</span>
             <button onClick={() => handleBulkChange('Pagada')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50">
-              Pagada
+              Conciliada
             </button>
             <button onClick={() => handleBulkChange('Pendiente')} disabled={isBulking} className="px-3 py-1.5 text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50">
               Pendiente

@@ -16,6 +16,7 @@ export default function ConciliacionPage() {
   const [dbError, setDbError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'pendientes' | 'conciliados'>('pendientes');
   const [search, setSearch] = useState('');
+  const [filterTipoMov, setFilterTipoMov] = useState<'Todos'|'Cobro'|'Pago'>('Todos');
   
   // Auto-conciliar state
   const [autoConciliando, setAutoConciliando] = useState(false);
@@ -72,12 +73,14 @@ export default function ConciliacionPage() {
         ? m.estado_conciliacion === 'Pendiente'
         : m.estado_conciliacion === 'Conciliado';
       
-      const q = search.toLowerCase();
-      const matchSearch = !q || m.concepto.toLowerCase().includes(q) || (m.cliente_expediente || '').toLowerCase().includes(q);
+      const matchTipo = filterTipoMov === 'Todos' || m.tipo === filterTipoMov;
       
-      return matchTab && matchSearch;
+      const q = search.toLowerCase();
+      const matchSearch = !q || m.concepto.toLowerCase().includes(q) || (m.cliente_expediente || '').toLowerCase().includes(q) || (m.beneficiario || '').toLowerCase().includes(q);
+      
+      return matchTab && matchTipo && matchSearch;
     });
-  }, [movimientos, activeTab, search]);
+  }, [movimientos, activeTab, filterTipoMov, search]);
 
   const handleAsociarFactura = async (facturaId: number) => {
     if (!pagoAsociando) return;
@@ -184,6 +187,15 @@ CREATE POLICY "Permitir todo a anonimos en movimientos" ON public.movimientos FO
               )}
             </button>
           )}
+
+          <div className="flex bg-gray-50 dark:bg-black/50 p-1 rounded-2xl border border-gray-200 dark:border-gray-800 shrink-0">
+            {(['Todos', 'Cobro', 'Pago'] as const).map(t => (
+              <button key={t} onClick={() => setFilterTipoMov(t)}
+                className={`px-3 py-1.5 text-sm rounded-xl font-medium transition-all ${filterTipoMov === t ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}>
+                {t === 'Todos' ? 'Todos' : t === 'Cobro' ? 'Cobros (+)' : 'Pagos (-)'}
+              </button>
+            ))}
+          </div>
 
           <div className="flex bg-gray-50 dark:bg-black/50 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-800 shrink-0">
             <button onClick={() => setActiveTab('pendientes')}

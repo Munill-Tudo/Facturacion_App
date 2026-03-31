@@ -45,7 +45,7 @@ export function EstadoSelect({ id, initialEstado, showIcon = true, context = 'fa
       >
         {opciones.map(opt => (
           <option key={opt} value={opt} className="bg-white text-black dark:bg-[#111] dark:text-white">
-            {opt}
+            {opt === 'Pagada' && context === 'factura' ? 'Conciliada' : opt}
           </option>
         ))}
       </select>
@@ -55,7 +55,7 @@ export function EstadoSelect({ id, initialEstado, showIcon = true, context = 'fa
         <span className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full pointer-events-none ${getDotColor(estado)}`}></span>
       )}
       <span className={`absolute left-2.5 pointer-events-none text-xs font-medium pl-3 ${updating ? 'opacity-50' : 'opacity-0'}`}>
-        {estado}
+        {estado === 'Pagada' && context === 'factura' ? 'Conciliada' : estado}
       </span>
       
       {updating && (
