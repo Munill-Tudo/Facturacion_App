@@ -30,7 +30,7 @@ function ResizeHandle({ col, onMouseDown }: { col: string; onMouseDown: (col: st
 }
 
 const INITIAL_WIDTHS = {
-  check: 44, num_rec: 100, fecha: 90, proveedor: 170, expediente: 110, cliente: 110,
+  check: 44, num_rec: 100, fecha: 90, fecha_pago: 90, proveedor: 170, expediente: 110, cliente: 110,
   tipo: 90, base: 80, iva: 75, pct_iva: 65, irpf: 75, pct_irpf: 68,
   total: 85, deuda: 100, estado: 110, acciones: 72,
 };
@@ -106,7 +106,7 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
   const totalDeuda = totalImporte;
 
   const COLS: [string, string][] = [
-    ['num_rec', 'Nº Rec.'], ['fecha', 'Fecha'], ['proveedor', 'Proveedor'],
+    ['num_rec', 'Nº Rec.'], ['fecha', 'Fecha'], ['fecha_pago', 'F. Pago'], ['proveedor', 'Proveedor'],
     ['expediente', 'Nº Exp.'], ['cliente', 'Cliente'], ['tipo', 'Tipo'],
     ['base', 'Base'], ['iva', 'IVA (€)'], ['pct_iva', 'IVA %'],
     ['irpf', 'IRPF (€)'], ['pct_irpf', 'IRPF %'],
@@ -133,16 +133,34 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-[#0a0a0a] rounded-2xl border border-gray-100 dark:border-gray-800 p-4 space-y-3">
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-xs text-gray-500 font-medium">Período:</span>
-          {(['libre','mes','trimestre','año'] as const).map(m => (
-            <button key={m} onClick={() => setPeriodMode(m)}
-              className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${periodMode === m ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400 hover:bg-gray-200'}`}>
-              {m.charAt(0).toUpperCase() + m.slice(1)}
+      <div className="bg-white dark:bg-[#0a0a0a] rounded-2xl border border-gray-100 dark:border-gray-800 p-4 shrink-0 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex bg-gray-50 dark:bg-black/50 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-800 shrink-0">
+            <button onClick={() => setFilterEstado('')}
+              className={`px-4 py-2 text-sm rounded-xl font-medium transition-all ${!filterEstado ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}>
+              Todos ({data.length})
             </button>
-          ))}
+            <button onClick={() => setFilterEstado('Pendiente')}
+              className={`px-4 py-2 text-sm rounded-xl font-medium transition-all ${filterEstado === 'Pendiente' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}>
+              ⚠️ Pendientes ({data.filter(i => i.estado === 'Pendiente').length})
+            </button>
+            <button onClick={() => setFilterEstado('Pagada')}
+              className={`px-4 py-2 text-sm rounded-xl font-medium transition-all ${filterEstado === 'Pagada' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-700' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}>
+              ✅ Pagadas ({data.filter(i => i.estado === 'Pagada').length})
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs text-gray-500 font-medium">Período:</span>
+            {(['libre','mes','trimestre','año'] as const).map(m => (
+              <button key={m} onClick={() => setPeriodMode(m)}
+                className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${periodMode === m ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400 hover:bg-gray-200'}`}>
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
+
         <div className="flex flex-wrap gap-3 items-center">
           {periodMode === 'libre' && (
             <>
@@ -184,15 +202,6 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar proveedor, expediente..."
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none" />
           </div>
-          <div className="relative">
-            <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)} className="pl-3 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none appearance-none cursor-pointer">
-              <option value="">Todos los estados</option>
-              <option value="Pendiente">Pendiente</option>
-              <option value="Pagada">Pagada</option>
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-          </div>
-          <span className="text-xs text-gray-400">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
 
@@ -256,6 +265,9 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
                     </td>
                     <td className="py-2 px-3 text-gray-500 text-xs whitespace-nowrap">
                       {inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}
+                    </td>
+                    <td className="py-2 px-3 text-emerald-600 dark:text-emerald-500 font-medium text-xs whitespace-nowrap">
+                      {inv.fecha_pago ? new Date(inv.fecha_pago).toLocaleDateString('es-ES') : '—'}
                     </td>
                     <td className="py-2 px-3 font-medium text-gray-900 dark:text-white whitespace-nowrap overflow-hidden text-ellipsis">
                       {inv.nombre_proveedor || inv.cliente || '—'}

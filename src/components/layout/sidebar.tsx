@@ -39,20 +39,20 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
         {role !== 'administracion' && (
           <NavItem href="/" icon={<LayoutDashboard className="w-5 h-5 shrink-0" />} label="Dashboard" isCollapsed={isCollapsed} active={pathname === '/'} />
         )}
-        <NavItem href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Fc. Recibidas" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
-        <NavItem href="/gastos" icon={<BarChart3 className="w-5 h-5 shrink-0" />} label="Análisis Gastos" isCollapsed={isCollapsed} active={pathname?.startsWith('/gastos')}
+        <NavItem href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Fc. Recibidas" shortLabel="Fc.Rec" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
+        <NavItem href="/gastos" icon={<BarChart3 className="w-5 h-5 shrink-0" />} label="Análisis Gastos" shortLabel="Análisis" isCollapsed={isCollapsed} active={pathname?.startsWith('/gastos')}
           colorClass="text-violet-600 hover:text-violet-700 hover:bg-violet-50/60 dark:text-violet-400 dark:hover:bg-violet-500/10" />
-        <NavItem href="/suplidos" icon={<CreditCard className="w-5 h-5 shrink-0" />} label="Suplidos" isCollapsed={isCollapsed} active={pathname === '/suplidos'} />
-        <NavItem href="/proveedores" icon={<Settings className="w-5 h-5 shrink-0" />} label="Proveedores" isCollapsed={isCollapsed} active={pathname === '/proveedores'} />
-        <NavItem href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
-        <NavItem href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
-        <NavItem href="/papelera" icon={<Trash2 className="w-5 h-5 shrink-0" />} label="Papelera" isCollapsed={isCollapsed} active={pathname === '/papelera'}
+        <NavItem href="/suplidos" icon={<CreditCard className="w-5 h-5 shrink-0" />} label="Suplidos" shortLabel="Suplidos" isCollapsed={isCollapsed} active={pathname === '/suplidos'} />
+        <NavItem href="/proveedores" icon={<Settings className="w-5 h-5 shrink-0" />} label="Proveedores" shortLabel="Provee." isCollapsed={isCollapsed} active={pathname === '/proveedores'} />
+        <NavItem href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" shortLabel="Mov.Banc" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
+        <NavItem href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" shortLabel="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
+        <NavItem href="/papelera" icon={<Trash2 className="w-5 h-5 shrink-0" />} label="Papelera" shortLabel="Papelera" isCollapsed={isCollapsed} active={pathname === '/papelera'}
           colorClass="text-red-500 hover:text-red-600 hover:bg-red-50/60 dark:text-red-400 dark:hover:bg-red-500/10" />
 
         {!isCollapsed && (
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Sistema</p>
         )}
-        <NavItem href="/ajustes" icon={<SlidersHorizontal className="w-5 h-5 shrink-0" />} label="Ajustes" isCollapsed={isCollapsed} active={pathname === '/ajustes'} />
+        <NavItem href="/ajustes" icon={<SlidersHorizontal className="w-5 h-5 shrink-0" />} label="Ajustes" shortLabel="Ajustes" isCollapsed={isCollapsed} active={pathname === '/ajustes'} />
       </nav>
 
       {/* User Footer */}
@@ -78,8 +78,8 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
   );
 }
 
-function NavItem({ href, icon, label, isCollapsed, active, colorClass }: {
-  href: string; icon: React.ReactNode; label: string; isCollapsed: boolean; active?: boolean; colorClass?: string;
+function NavItem({ href, icon, label, shortLabel, isCollapsed, active, colorClass }: {
+  href: string; icon: React.ReactNode; label: string; shortLabel?: string; isCollapsed: boolean; active?: boolean; colorClass?: string;
 }) {
   const activeClass = "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 font-semibold";
   const defaultClass = "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/60 dark:hover:bg-white/5";
@@ -88,11 +88,12 @@ function NavItem({ href, icon, label, isCollapsed, active, colorClass }: {
   return (
     <Link
       href={href}
-      title={isCollapsed ? label : undefined}
-      className={`flex items-center gap-3 rounded-xl font-medium transition-all duration-200 ${finalClass} ${isCollapsed ? 'p-2.5 justify-center' : 'px-3 py-2.5'}`}
+      title={isCollapsed && !shortLabel ? label : undefined}
+      className={`flex items-center gap-3 rounded-xl font-medium transition-all duration-200 ${finalClass} ${isCollapsed ? 'p-2.5 justify-center flex-col gap-1' : 'px-3 py-2.5'}`}
     >
       {icon}
       {!isCollapsed && <span className="whitespace-nowrap">{label}</span>}
+      {isCollapsed && shortLabel && <span className="text-[10px] font-semibold leading-none text-center">{shortLabel}</span>}
     </Link>
   );
 }

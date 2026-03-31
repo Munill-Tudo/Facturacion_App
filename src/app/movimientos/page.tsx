@@ -19,7 +19,7 @@ export default function MovimientosPage() {
     setLoading(true);
     const { data } = await supabase
       .from('movimientos')
-      .select('*')
+      .select('*, facturas(fecha)')
       .order('fecha', { ascending: false });
     
     setMovimientos(data || []);
@@ -106,7 +106,6 @@ export default function MovimientosPage() {
                 <th className="px-6 py-4 font-semibold">Observaciones / Detalles</th>
                 <th className="px-6 py-4 font-semibold">Estado</th>
                 <th className="px-6 py-4 font-semibold text-right">Importe</th>
-                <th className="px-6 py-4 font-semibold text-right">Saldo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800/60">
@@ -146,10 +145,17 @@ export default function MovimientosPage() {
                     </td>
                     <td className="px-6 py-4">
                       {mov.estado_conciliacion === 'Conciliado' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 text-xs font-semibold">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          {mov.cliente_expediente || 'Conciliado'}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 text-xs font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {mov.cliente_expediente || 'Conciliado'}
+                          </span>
+                          {mov.facturas?.fecha && (
+                            <span className="text-[10px] text-gray-500 font-medium">
+                              Fc: {new Date(mov.facturas.fecha).toLocaleDateString('es-ES')}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400 text-xs font-semibold">
                           Pendiente
@@ -160,9 +166,6 @@ export default function MovimientosPage() {
                       <p className={`font-bold text-base whitespace-nowrap ${mov.tipo === 'Cobro' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
                         {mov.tipo === 'Cobro' ? '+' : ''}{fmt(Number(mov.importe))}
                       </p>
-                    </td>
-                    <td className="px-6 py-4 text-right text-gray-500 font-mono text-sm whitespace-nowrap">
-                      {mov.saldo ? `${fmt(Number(mov.saldo))}` : '-'}
                     </td>
                   </tr>
                 ))
