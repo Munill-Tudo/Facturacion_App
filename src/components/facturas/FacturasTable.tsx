@@ -21,6 +21,30 @@ function getISOWeek(d: Date): number {
 }
 function getQuarter(d: Date): number { return Math.floor(d.getMonth() / 3) + 1; }
 
+function useLocalStorage<T>(key: string, initialValue: T) {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window === 'undefined') return initialValue;
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  const setValue = (value: T | ((val: T) => T)) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      }
+    } catch (err) { }
+  };
+
+  return [storedValue, setValue] as const;
+}
+
 interface Factura {
   id: number; numero?: string; fecha?: string; fecha_pago?: string;
   cliente?: string; nombre_proveedor?: string;
@@ -28,6 +52,7 @@ interface Factura {
   tipo?: string; total_base?: number; total_iva?: number; total_irpf?: number;
   importe?: number; estado?: string; file_url?: string; archivo_url?: string;
   tipo_gasto?: string; subtipo_gasto?: string; numero_recepcion?: string;
+  concepto?: string;
 }
 
 // Module-level to avoid re-creation every render
@@ -46,15 +71,19 @@ export function FacturasTable({ data }: { data: Factura[] }) {
   const router = useRouter();
   const { role } = useAuth();
   const [confirmModal, setConfirmModal] = useState<{ id: number } | null>(null);
-  const [search, setSearch] = useState('');
-  const [filterConciliada, setFilterConciliada] = useState<'Todas' | 'Pendiente' | 'Pagada'>('Todas');
-  const [filterTipo, setFilterTipo] = useState('');
-  const [periodMode, setPeriodMode] = useState<'libre' | 'mes' | 'trimestre' | 'año'>('libre');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [selYear, setSelYear] = useState(new Date().getFullYear().toString());
-  const [selMonth, setSelMonth] = useState((new Date().getMonth() + 1).toString());
-  const [selQ, setSelQ] = useState('1');
+  
+  // Persisted Filters
+  const [search, setSearch] = useLocalStorage('ft_search', '');
+  const [filterConciliada, setFilterConciliada] = useLocalStorage<'Todas' | 'Pendiente' | 'Pagada'>('ft_concil', 'Todas');
+  const [filterTipo, setFilterTipo] = useLocalStorage('ft_tipo', '');
+  const [periodMode, setPeriodMode] = useLocalStorage<'libre' | 'mes' | 'trimestre' | 'año'>('ft_period_mode', 'libre');
+  const [dateFrom, setDateFrom] = useLocalStorage('ft_dateFrom', '');
+  const [dateTo, setDateTo] = useLocalStorage('ft_dateTo', '');
+  const [selYear, setSelYear] = useLocalStorage('ft_year', new Date().getFullYear().toString());
+  const [selMonth, setSelMonth] = useLocalStorage('ft_month', (new Date().getMonth() + 1).toString());
+  const [selQ, setSelQ] = useLocalStorage('ft_q', '1');
+  
+  // Transient state
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [isBulking, setIsBulking] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -79,10 +108,9 @@ export function FacturasTable({ data }: { data: Factura[] }) {
   };
 
   const { widths, onMouseDown } = useResizableColumns('cols_facturas', {
-    num_rec: 110, fecha: 90, proveedor: 180,
-    nif: 110, tipo_gasto: 160, tipo: 90, poblacion: 110,
-    base: 90, iva: 80, pct_iva: 70, irpf: 80, pct_irpf: 72, total: 90,
-    estado: 110, acciones: 80,
+    num_rec: 110, fecha: 90, fecha_pago: 90, proveedor: 180, concepto: 160,
+    tipo_gasto: 160, tipo: 90, base: 90, iva: 80, pct_iva: 70, 
+    irpf: 80, pct_irpf: 72, total: 90, estado: 110, acciones: 80,
   });
 
   const handleBulkChange = async (estado: string) => {
@@ -138,6 +166,9 @@ export function FacturasTable({ data }: { data: Factura[] }) {
         } else if (sortConfig.key === 'fecha') {
            aValue = a.fecha ? new Date(a.fecha).getTime() : 0;
            bValue = b.fecha ? new Date(b.fecha).getTime() : 0;
+        } else if (sortConfig.key === 'fecha_pago') {
+           aValue = a.fecha_pago ? new Date(a.fecha_pago).getTime() : 0;
+           bValue = b.fecha_pago ? new Date(b.fecha_pago).getTime() : 0;
         }
 
         if (aValue == null) return 1;
@@ -342,11 +373,11 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                 {([
                   ['num_rec',   'Nº Fac. Recibida'],
                   ['fecha',     'Fecha'],
+                  ['fecha_pago','F. Pago'],
                   ['proveedor', 'Proveedor'],
-                  ['nif',       'NIF'],
+                  ['concepto',  'Concepto'],
                   ['tipo_gasto','Tipo de Gasto'],
                   ['tipo',      'Tipo'],
-                  ['poblacion', 'Población'],
                   ['base',      'Base'],
                   ['iva',       'IVA (€)'],
                   ['pct_iva',   'IVA %'],
@@ -360,7 +391,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                     key={col}
                     onClick={() => handleSort(col)}
                     style={{ minWidth: widths[col], width: widths[col] }}
-                    className="py-3 font-medium px-4 relative group/th whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                    className="py-3 font-medium px-4 relative group/th whitespace-normal break-words cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                   >
                     <div className="flex items-center gap-1">
                       {label}
@@ -386,21 +417,25 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                       onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
                       className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
                   </td>
-                  <td className="py-3 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs">
+                  <td className="py-3 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs break-words" title={inv.numero_recepcion || `Fc. Rec.-${String(inv.id).padStart(4, '0')}`}>
                     {inv.numero_recepcion || `Fc. Rec.-${String(inv.id).padStart(4, '0')}`}
                   </td>
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400 text-xs">
                     {inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}
                   </td>
-                  <td className="py-2 px-3 font-medium text-gray-900 dark:text-white overflow-hidden text-ellipsis whitespace-nowrap">
+                  <td className="py-3 px-4 text-emerald-600 dark:text-emerald-500 font-medium text-xs">
+                    {inv.fecha_pago ? new Date(inv.fecha_pago).toLocaleDateString('es-ES') : '—'}
+                  </td>
+                  <td className="py-2 px-3 font-medium text-gray-900 dark:text-white truncate" title={inv.nombre_proveedor || inv.cliente || ''}>
                     {inv.nombre_proveedor || inv.cliente || '—'}
                   </td>
-                  <td className="py-3 px-4 font-mono text-gray-500 text-xs">{inv.nif_proveedor || '—'}</td>
+                  <td className="py-3 px-4 text-gray-500 text-[11px] truncate" title={inv.concepto || ''}>
+                    {inv.concepto || '—'}
+                  </td>
                   <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
                     <TipoGastoSelect id={inv.id} initialTipoGasto={inv.tipo_gasto} initialSubtipoGasto={inv.subtipo_gasto} />
                   </td>
                   <td className="py-3 px-4"><TipoSelect id={inv.id} initialTipo={inv.tipo} /></td>
-                  <td className="py-3 px-4 text-gray-600 dark:text-gray-400 text-xs">{inv.poblacion_proveedor || '—'}</td>
                   <td className="py-3 px-4 text-gray-700 dark:text-gray-300">{inv.total_base != null ? fmt(Number(inv.total_base)) : '—'}</td>
                   <td className="py-3 px-4 text-gray-500 text-xs">{inv.total_iva != null ? fmt(Number(inv.total_iva)) : '—'}</td>
                   <td className="py-3 px-4 text-gray-500 text-xs">
