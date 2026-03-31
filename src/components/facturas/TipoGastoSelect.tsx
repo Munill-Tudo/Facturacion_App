@@ -39,9 +39,9 @@ export function TipoGastoSelect({ id, initialTipoGasto, initialSubtipoGasto }: T
         onChange={e => handleTipoChange(e.target.value)}
         disabled={saving}
         onClick={e => e.stopPropagation()}
-        className={`px-2 py-1 text-xs rounded-lg border cursor-pointer outline-none transition-colors
+        className={`px-1.5 py-0.5 text-[10px] rounded-md border cursor-pointer outline-none transition-colors
           ${tipo
-            ? 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 text-violet-800 dark:text-violet-300 font-semibold'
+            ? 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 text-violet-800 dark:text-violet-300 font-medium'
             : 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-gray-700 text-gray-500'
           } focus:ring-2 focus:ring-violet-500/30`}
       >
@@ -57,9 +57,9 @@ export function TipoGastoSelect({ id, initialTipoGasto, initialSubtipoGasto }: T
           onChange={e => handleSubtipoChange(e.target.value)}
           disabled={saving}
           onClick={e => e.stopPropagation()}
-          className={`px-2 py-1 text-xs rounded-lg border cursor-pointer outline-none transition-colors
+          className={`px-1.5 py-0.5 text-[10px] rounded-md border cursor-pointer outline-none transition-colors
             ${subtipo
-              ? 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-400'
+              ? 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-400 font-medium'
               : 'bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-gray-700 text-gray-400'
             } focus:ring-2 focus:ring-violet-500/30`}
         >
