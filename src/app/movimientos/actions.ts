@@ -2,6 +2,11 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
+import { 
+  obtenerFirmaContrapartida, 
+  extraerYValidarISO11649, 
+  generarHashTransaccion 
+} from "@/lib/normalizacion";
 
 export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
   if (!nuevosMovimientos.length) return { inserted: 0, duplicates: 0 };
@@ -24,14 +29,14 @@ export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
   }
 
   const existingSet = new Set(
-    (existentes || []).map(e => `${e.fecha}_${e.concepto}_${Number(e.importe)}`)
+    (existentes || []).map(e => generarHashTransaccion(e.fecha, e.concepto, Number(e.importe)))
   );
 
   const paraInsertar = [];
   let duplicates = 0;
 
   for (const mov of nuevosMovimientos) {
-    const key = `${mov.fecha}_${mov.concepto}_${Number(mov.importe)}`;
+    const key = generarHashTransaccion(mov.fecha, mov.concepto, Number(mov.importe));
     if (existingSet.has(key)) {
       duplicates++;
     } else {
@@ -64,95 +69,7 @@ export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
   return { inserted: paraInsertar.length, duplicates, autoconciliados: resAuto.conciliados };
 }
 
-// ─── Helpers del motor de scoring ────────────────────────────────────────────
-
-const STOP_WORDS = new Set([
-  's.a.', 'sa', 'sl', 's.l.', 'slp', 's.l.p.', 'slu', 'sll',
-  'spain', 'espana', 'espanya', 'sociedad', 'limitada', 'anonima',
-  'de', 'del', 'la', 'el', 'los', 'las', 'y', 'e', 'en', 'con',
-]);
-
-/** Normaliza texto: minúsculas, sin acentos, sin puntuación */
-function normalizar(texto: string): string {
-  return (texto || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // quitar acentos
-    .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, ' ');
-}
-
-/** Palabras significativas de un nombre de proveedor (>= 4 letras, sin stop words) */
-function palabrasSignificativas(nombre: string): string[] {
-  return normalizar(nombre)
-    .split(/\s+/)
-    .filter(p => p.length >= 4 && !STOP_WORDS.has(p));
-}
-
-/**
- * Calcula una puntuación de coincidencia entre un movimiento bancario y una factura.
- * - 100 pts: nombre completo del proveedor encontrado en el texto del banco
- * - 30 pts por cada palabra significativa del proveedor encontrada
- * - Se busca en: concepto + beneficiario + observaciones
- * - Nivel Aprendizaje Automático: +500 si el texto encaja con un movimiento pasado previamente asignado a este proveedor.
- */
-function calcularScore(mov: any, factura: any, historicoMap?: Map<string, string[]>): number {
-  const normalBankFull = normalizar(
-    [mov.concepto, mov.beneficiario, mov.observaciones].filter(Boolean).join(' ')
-  );
-  
-  const rawProvName = factura.nombre_proveedor || factura.cliente || '';
-  const nombreProv = normalizar(rawProvName);
-
-  if (!nombreProv || nombreProv.length < 3) return 0;
-
-  let score = 0;
-
-  // Match completo del nombre del proveedor
-  if (normalBankFull.includes(nombreProv)) {
-    score += 100;
-  } else {
-    // Match por palabras significativas
-    const palabras = palabrasSignificativas(rawProvName);
-    if (palabras.length > 0) {
-      for (const p of palabras) {
-        if (normalBankFull.includes(p)) score += 30;
-      }
-    }
-  }
-
-  // --- Auto-Aprendizaje Histórico ---
-  if (historicoMap && historicoMap.has(nombreProv)) {
-    const pastBankTexts = historicoMap.get(nombreProv)!;
-    
-    // Extraemos texto limpio del movimiento actual (beneficiario + concepto prioritarios)
-    const curBankClean = normalizar([mov.beneficiario, mov.concepto].filter(Boolean).join(' '));
-    const currentWords = curBankClean.split(/\s+/).filter(w => w.length >= 4 && !STOP_WORDS.has(w));
-
-    let matchedHist = false;
-    for (const pastStr of pastBankTexts) {
-      // 1. Coincidencia exacta (mismo beneficiario y concepto repetido, ej. recibo mensual identico)
-      if (curBankClean === pastStr) {
-        matchedHist = true; break;
-      }
-      
-      // 2. Coincidencia difusa histórica (comparten al menos 2 palabras clave, ej. "SEPA Vodafone" y "SEPA Vodafone Ene")
-      const pastWords = pastStr.split(/\s+/).filter(w => w.length >= 4 && !STOP_WORDS.has(w));
-      let common = 0;
-      for (const cw of currentWords) {
-        if (pastWords.includes(cw)) common++;
-      }
-      if (common >= 2) {
-        matchedHist = true; break;
-      }
-    }
-
-    if (matchedHist) score += 500;
-  }
-
-  return score;
-}
-
-// ─── Motor principal ──────────────────────────────────────────────────────────
+// ─── Motor principal de Autoconciliación (Pasadas Estrictas) ─────────────────
 
 export async function autoConciliarPagos(): Promise<{ conciliados: number; errores: string[] }> {
   let conciliados = 0;
@@ -170,6 +87,7 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
     if (!pagos || pagos.length === 0) return { conciliados: 0, errores: [] };
 
     // 2. Obtener TODAS las facturas pendientes
+    // Se extraen todos los campos para normalizarlos en memoria
     const { data: facturas, error: facturasErr } = await supabase
       .from('facturas')
       .select('id, nombre_proveedor, cliente, importe, num_expediente, tipo, estado')
@@ -178,90 +96,86 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
     if (facturasErr) throw facturasErr;
     if (!facturas || facturas.length === 0) return { conciliados: 0, errores: [] };
 
-    // 3. Obtener Histórico de Auto-Aprendizaje
-    // Buscamos movimientos pasados que ya tengan una factura vinculada
-    const { data: historial } = await supabase
-      .from('movimientos')
-      .select('concepto, beneficiario, facturas(nombre_proveedor, cliente)')
-      .eq('estado_conciliacion', 'Conciliado')
-      .not('factura_id', 'is', null);
+    // Preparar facturas normalizadas en memoria
+    const facturasNorm = facturas.map(f => {
+      const rf_raw = extraerYValidarISO11649(f.nombre_proveedor || '') || extraerYValidarISO11649(f.cliente || '');
+      return {
+        ...f,
+        firma_contrapartida: obtenerFirmaContrapartida(f.nombre_proveedor || f.cliente || ''),
+        referencia_rf: rf_raw // Si hubiera campo en BD se usaría ese, temporalmente extraemos del texto
+      };
+    });
 
-    const historicoMap = new Map<string, string[]>();
-    if (historial) {
-      for (const h of historial) {
-        const facs = h.facturas;
-        if (!facs) continue;
-        const facHist = Array.isArray(facs) ? facs[0] : facs;
-        if (!facHist) continue;
-        
-        const pName = normalizar(facHist.nombre_proveedor || facHist.cliente || '');
-        if (!pName) continue;
-        
-        // Guardamos la firma del banco normalizada (beneficiario + concepto)
-        const bankStr = normalizar([h.beneficiario, h.concepto].filter(Boolean).join(' '));
-        if (!historicoMap.has(pName)) historicoMap.set(pName, []);
-        historicoMap.get(pName)!.push(bankStr);
-      }
-    }
-
-    // Copia mutable para marcar facturas ya usadas en esta sesión
-    const facturasDisponibles = [...facturas];
+    // Copia mutable para pilar facturas y no re-conciliarlas
+    const facturasDisponibles = [...facturasNorm];
 
     for (const mov of pagos) {
       const absImporte = Math.abs(Number(mov.importe));
-
-      // Candidatas por importe exacto
-      const candidatas = facturasDisponibles.filter(
-        f => Math.abs(Number(f.importe)) === absImporte
-      );
-
-      if (candidatas.length === 0) continue;
-
+      const strBanco = [mov.concepto, mov.beneficiario, mov.observaciones].filter(Boolean).join(' ');
+      
       let facturaElegida: any = null;
-      let nivelConfianza = '';
+      let pasoConciliacion = '';
 
-      if (candidatas.length === 1) {
-        // — Caso A: única candidata con ese importe —
-        const score = calcularScore(mov, candidatas[0], historicoMap);
-
-        if (score >= 500) {
-          facturaElegida = candidatas[0];
-          nivelConfianza = 'histórico';
-        } else if (score >= 30) {
-          // Nivel 1/2: nombre coincide (completo o parcial)
-          facturaElegida = candidatas[0];
-          nivelConfianza = score >= 100 ? 'exacto' : 'fuzzy';
-        } else {
-          // Nivel 3: único importe, sin nombre coincidente — conciliamos igualmente
-          facturaElegida = candidatas[0];
-          nivelConfianza = 'solo_importe';
+      // --- PASADA B: Regla Determinística 1:1 Máxima (RF) ---
+      const rfMovimiento = extraerYValidarISO11649(strBanco);
+      
+      if (rfMovimiento) {
+        // Buscar factura que comparta exactamente esa RF
+        const candidatasRF = facturasDisponibles.filter(f => f.referencia_rf === rfMovimiento);
+        
+        if (candidatasRF.length === 1) {
+          facturaElegida = candidatasRF[0];
+          pasoConciliacion = 'PASADA B (RF Exacto)';
+        } else if (candidatasRF.length > 1) {
+           // En el extraño caso de que haya dos facturas con MISMA RF, abortamos autoconciliación
+           errores.push(`Movimiento ${mov.id}: Múltiples facturas comparten la RF ${rfMovimiento}. Ambigüedad detectada.`);
+           continue; 
         }
-      } else {
-        // — Caso B: múltiples candidatas con ese importe — buscar la con mejor score —
-        let mejorScore = 0;
-        let mejorCandidatas: any[] = [];
-
-        for (const c of candidatas) {
-          const score = calcularScore(mov, c, historicoMap);
-          if (score > mejorScore) {
-            mejorScore = score;
-            mejorCandidatas = [c];
-          } else if (score === mejorScore && score > 0) {
-            mejorCandidatas.push(c);
-          }
-        }
-
-        if (mejorScore >= 30 && mejorCandidatas.length >= 1) {
-          // Ganador claro por nombre, o empate entre varias facturas del MISMO PROVEEDOR
-          // Si hay empate, cogemos la más antigua (menor ID)
-          mejorCandidatas.sort((a, b) => a.id - b.id);
-          facturaElegida = mejorCandidatas[0];
-          nivelConfianza = mejorScore >= 500 ? 'histórico' : (mejorScore >= 100 ? 'exacto' : 'fuzzy');
-        }
-        // Si hay empate o score=0 con múltiples candidatas → dejar para revisión manual
       }
 
-      // 3. Aplicar conciliación si hay factura elegida
+      // --- PASADA C: Regla 1:1 Mismo Importe + Contrapartida Estricta ---
+      if (!facturaElegida) {
+        // En esta capa, SI O SI el importe tiene que cruzar al 100%
+        const candidatasImporte = facturasDisponibles.filter(f => Math.abs(Number(f.importe)) === absImporte);
+        
+        if (candidatasImporte.length > 0) {
+          // Extraemos firma de la contrapartida en el banco
+          const firmaBanco = obtenerFirmaContrapartida(strBanco);
+          
+          let candidatasFuertes: any[] = [];
+          
+          if (candidatasImporte.length === 1) {
+             // Si solo hay una candidata con ese importe exacto...
+             // SOLO conciliamos si hay un match razonable en el texto.
+             // Para evitar matches ciegos por importe, validamos si la firma de la factura aparece en el banco
+             const fCandidata = candidatasImporte[0];
+             if (fCandidata.firma_contrapartida.length > 3 && firmaBanco.includes(fCandidata.firma_contrapartida)) {
+                 facturaElegida = fCandidata;
+                 pasoConciliacion = 'PASADA C (Único Importe + Nombre coincide)';
+             }
+             // Si el importe es único pero el nombre NO coincide en absoluto, NO conciliamos. (Adiós error de adivinanza).
+          } else {
+             // Si hay varias facturas del mismo importe exacto
+             // Filtramos las que compartan la misma firma
+             for (const cand of candidatasImporte) {
+                if (cand.firma_contrapartida.length > 3 && firmaBanco.includes(cand.firma_contrapartida)) {
+                  candidatasFuertes.push(cand);
+                }
+             }
+
+             if (candidatasFuertes.length === 1) {
+                facturaElegida = candidatasFuertes[0];
+                pasoConciliacion = 'PASADA C (Desempate por Nombre Exacto)';
+             } else if (candidatasFuertes.length > 1) {
+                // EXCEPCIÓN: Varias facturas del MISMO IMPORTE y MISMO PROVEEDOR. No adivinamos.
+                console.warn(`[AutoConciliación] Ambigüedad: Movimiento ${mov.id} ${absImporte} tiene múltiples facturas de idéntico proveedor.`);
+                errores.push(`Movimiento ${mov.id}: Varias facturas del mismo importe y proveedor. Requiere revisión manual.`);
+             }
+          }
+        }
+      }
+
+      // --- APLICAR CONCILIACIÓN si hubo victoria clara ---
       if (facturaElegida) {
         const { error: updMov } = await supabase
           .from('movimientos')
@@ -298,7 +212,7 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
         if (idx > -1) facturasDisponibles.splice(idx, 1);
 
         console.log(
-          `[AutoConciliación] ✅ "${mov.concepto}" (${absImporte}€) → Factura #${facturaElegida.id} "${facturaElegida.nombre_proveedor || facturaElegida.cliente}" [${nivelConfianza}]`
+          `[AutoConciliación] ✅ [${pasoConciliacion}] -> Movimiento ${mov.id} (${absImporte}€) -> Fact. #${facturaElegida.id}`
         );
         conciliados++;
       }

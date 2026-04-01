@@ -228,7 +228,7 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
       {/* Table */}
       <div className="bg-white dark:bg-[#0a0a0a] rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm" style={{ tableLayout: 'fixed' }}>
+          <table className="hidden md:table w-full text-left border-collapse text-sm" style={{ tableLayout: 'fixed' }}>
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-800 text-gray-500 bg-gray-50/50 dark:bg-white/5">
                 <th className="py-2 px-3 w-11">
@@ -305,6 +305,71 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* VISTA MÓVIL: Tarjetas */}
+        <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
+          {filtered.length === 0 && (
+            <div className="py-12 text-center text-gray-500 text-sm">No se encontraron suplidos con esos filtros.</div>
+          )}
+          {filtered.map((inv) => {
+            const deudaCliente = (Number(inv.importe) || 0) + Math.abs(Number(inv.total_irpf) || 0);
+            return (
+              <div key={`msup-${inv.id}`} className={`p-4 flex flex-col gap-3 transition-colors ${selectedIds.includes(inv.id) ? 'bg-emerald-50/40 dark:bg-emerald-500/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'}`}>
+                
+                <div className="flex items-start gap-3">
+                  <input type="checkbox"
+                    checked={selectedIds.includes(inv.id)}
+                    onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
+                    className="mt-1 w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer shrink-0" 
+                  />
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 text-[10px] font-medium px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-500/10 rounded-md">
+                        Fc.Rec.-{String(inv.id).padStart(4, '0')}
+                      </span>
+                      <span className="text-gray-400 text-xs">{inv.fecha ? new Date(inv.fecha).toLocaleDateString('es-ES') : '—'}</span>
+                    </div>
+                    <p className="font-semibold text-gray-900 dark:text-white line-clamp-1 text-sm">{inv.nombre_proveedor || inv.cliente || '—'}</p>
+                    <div className="flex flex-col gap-1 mt-1.5" onClick={e => e.stopPropagation()}>
+                      <EditableCell id={inv.id} field="num_expediente" value={inv.num_expediente} placeholder="Añadir exp..." />
+                      <EditableCell id={inv.id} field="cliente_expediente" value={inv.cliente_expediente} placeholder="Añadir cliente..." />
+                    </div>
+                  </div>
+                  
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Deuda Cliente</p>
+                    <p className="font-bold text-violet-700 dark:text-violet-400 text-base">{fmt(deudaCliente)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Total: {fmt(inv.importe)}</p>
+                    
+                    <div className="mt-2 flex justify-end" onClick={e => e.stopPropagation()}>
+                      <EstadoSelect id={inv.id} initialEstado={inv.estado || 'Pendiente'} context="suplido" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800/60 mt-1">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1" onClick={e => e.stopPropagation()}>
+                     <TipoSelect id={inv.id} initialTipo={inv.tipo} />
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {(inv.file_url || inv.archivo_url) ? (
+                      <a href={inv.file_url || inv.archivo_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-2 text-gray-400 hover:text-emerald-600 transition-colors rounded-xl bg-gray-50 dark:bg-white/5 flex items-center">
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    ) : (
+                      <span className="p-2 text-gray-300 dark:text-gray-700 bg-gray-50 dark:bg-white/5 rounded-xl flex items-center"><ExternalLink className="w-4 h-4" /></span>
+                    )}
+                    <button onClick={e => { e.stopPropagation(); setConfirmModal({ id: inv.id }); }}
+                      className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-xl bg-gray-50 dark:bg-white/5 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

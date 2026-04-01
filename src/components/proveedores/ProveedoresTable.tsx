@@ -64,7 +64,7 @@ export function ProveedoresTable() {
 
       <div className="bg-white dark:bg-[#111] rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
+          <table className="hidden md:table w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-gray-800 text-gray-500">
               <tr>
                 <th className="px-6 py-4 font-semibold">Razón Social</th>
@@ -119,6 +119,63 @@ export function ProveedoresTable() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* VISTA MÓVIL: Tarjetas */}
+        <div className="md:hidden divide-y divide-gray-50 dark:divide-gray-800/60">
+          {loading && proveedores.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 text-sm">Cargando directorio...</div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 text-sm">Ningún proveedor encontrado.</div>
+          ) : (
+            filtered.map(p => (
+              <div 
+                key={`p-${p.id}`} 
+                onDoubleClick={() => setEditingProv(p)}
+                className="p-4 hover:bg-gray-50/80 dark:hover:bg-white/5 transition-colors group cursor-pointer"
+              >
+                <div className="flex justify-between items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-gray-900 dark:text-white text-base leading-tight mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      {p.nombre}
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
+                      <span className="font-mono bg-gray-100 dark:bg-[#1a1a1a] px-1.5 py-0.5 rounded text-gray-700 dark:text-gray-300">{p.nif}</span>
+                      {p.poblacion && <span>• {p.poblacion}</span>}
+                    </div>
+                  </div>
+                  
+                  {isDireccion && (
+                    <div className="shrink-0" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={e => { e.stopPropagation(); setDeletingProv(p); }}
+                        className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="block text-[10px] uppercase tracking-wider text-gray-400 mb-0.5">Contacto</span>
+                    <p className="text-gray-700 dark:text-gray-300 truncate text-xs">{p.email || '—'}</p>
+                    {p.telefono && <p className="text-gray-500 text-xs mt-0.5">{p.telefono}</p>}
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase tracking-wider text-gray-400 mb-0.5">IBAN</span>
+                    <p className="font-mono text-gray-600 dark:text-gray-400 text-[11px] break-all">{p.iban || 'No registrado'}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800" onClick={e => e.stopPropagation()}>
+                  <span className="block text-[10px] uppercase tracking-wider text-gray-400 mb-1.5">Clasificación Automática</span>
+                  <TipoDefectoSelect id={p.id} initialTipo={p.tipo_defecto} />
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

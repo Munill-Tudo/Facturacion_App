@@ -96,7 +96,7 @@ export default function MovimientosPage() {
 
       <div className="bg-white dark:bg-[#111] rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="hidden md:table w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-gray-800 text-gray-500">
               <tr>
                 <th className="px-6 py-4 font-semibold shrink-0 w-16">Tipo</th>
@@ -172,6 +172,60 @@ export default function MovimientosPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* VISTA MÓVIL: Tarjetas */}
+        <div className="md:hidden divide-y divide-gray-50 dark:divide-gray-800/60">
+          {loading && movimientos.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 text-sm">Cargando movimientos...</div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 text-sm">No hay movimientos todavía.</div>
+          ) : (
+            filtered.map(mov => (
+              <div key={`m-${mov.id}`} className="p-4 hover:bg-gray-50/50 dark:hover:bg-white/5 transition-colors flex flex-col gap-3 group">
+                <div className="flex justify-between items-start gap-3">
+                  <div className={`w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center shadow-inner ${mov.tipo === 'Cobro' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400'}`}>
+                    {mov.tipo === 'Cobro' ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <p className="font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug">{mov.concepto}</p>
+                    <div className="flex flex-wrap gap-2 items-center mt-1">
+                      <span className="text-gray-900 dark:text-white font-medium text-xs">{new Date(mov.fecha).toLocaleDateString('es-ES')}</span>
+                      {mov.beneficiario && <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold truncate bg-indigo-50 dark:bg-indigo-500/10 px-1.5 py-0.5 rounded-md">{mov.beneficiario}</span>}
+                    </div>
+                  </div>
+                  
+                  <div className="text-right shrink-0 pt-0.5">
+                    <p className={`font-bold text-base tabular-nums ${mov.tipo === 'Cobro' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                      {mov.tipo === 'Cobro' ? '+' : ''}{fmt(Number(mov.importe))}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="ml-[52px] flex flex-col gap-2">
+                  {mov.observaciones && <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 bg-gray-50 dark:bg-[#1a1a1a] p-2 rounded-xl border border-gray-100 dark:border-gray-800">{mov.observaciones}</p>}
+                  
+                  <div className="flex flex-wrap items-center justify-between gap-2 mt-1">
+                    <div className="flex items-center gap-2">
+                       {mov.estado_conciliacion === 'Conciliado' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 text-[10px] font-semibold">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {mov.cliente_expediente || 'Conciliado'}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400 text-[10px] font-semibold">
+                            Pendiente
+                          </span>
+                        )}
+                        {mov.codigo && <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px]">Cód: {mov.codigo}</span>}
+                    </div>
+                    {mov.remesa && <span className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Remesa: {mov.remesa}</span>}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
