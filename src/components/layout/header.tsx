@@ -1,18 +1,23 @@
 'use client';
 
 import { useAuth } from '@/components/auth/AuthProvider';
-import { Receipt, LogOut } from 'lucide-react';
+import { Receipt, LogOut, Menu } from 'lucide-react';
 import { NotificationsMenu } from './NotificationsMenu';
 
-export function Header() {
+export function Header({ onOpenMobileNav }: { onOpenMobileNav?: () => void }) {
   const { user, role, signOut } = useAuth();
   const initials = user?.email?.[0]?.toUpperCase() ?? '?';
   const label = role === 'direccion' ? 'Dirección' : role === 'administracion' ? 'Administración' : '';
 
   return (
     <header className="h-14 md:h-16 sticky top-0 z-40 flex items-center justify-between px-4 md:px-8 bg-white/70 dark:bg-black/70 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50">
-      {/* Logo: solo en móvil */}
-      <div className="flex items-center gap-2 md:hidden">
+      {/* Logo y Menú: solo en móvil */}
+      <div className="flex items-center gap-3 md:hidden">
+        {onOpenMobileNav && (
+          <button onClick={onOpenMobileNav} className="p-1.5 -ml-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 transition-colors">
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow shadow-indigo-500/20">
           <Receipt className="w-4 h-4 text-white" />
         </div>

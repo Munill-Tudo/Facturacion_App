@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt, BarChart3, Settings, SlidersHorizontal, Landmark } from "lucide-react";
+import { LayoutDashboard, FileText, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt, BarChart3, Settings, SlidersHorizontal, Landmark, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
-export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean, setIsCollapsed: (val: boolean) => void }) {
+export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }: { isCollapsed: boolean, setIsCollapsed: (val: boolean) => void, isMobile?: boolean, onMobileClose?: () => void }) {
   const pathname = usePathname();
   const { role } = useAuth();
 
 
   return (
-    <aside className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-white/60 dark:bg-black/80 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`}>
+    <aside className={`flex flex-col bg-white/60 dark:bg-black/80 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50 transition-all duration-300 ${isMobile ? 'relative w-full h-full z-[60]' : `fixed inset-y-0 left-0 z-50 ${isCollapsed ? 'w-20' : 'w-64'}`}`}>
       {/* Logo */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-gray-200/50 dark:border-gray-800/50">
         <div className={`flex items-center gap-2 overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
@@ -22,13 +22,23 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
             FacturApp
           </span>
         </div>
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 transition-colors shrink-0 ${isCollapsed ? 'mx-auto' : ''}`}
-          title={isCollapsed ? "Expandir" : "Colapsar"}
-        >
-          {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-        </button>
+        {isMobile ? (
+          <button
+            onClick={onMobileClose}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 transition-colors shrink-0"
+            title="Cerrar Menú"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        ) : (
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 transition-colors shrink-0 ${isCollapsed ? 'mx-auto' : ''}`}
+            title={isCollapsed ? "Expandir" : "Colapsar"}
+          >
+            {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+          </button>
+        )}
       </div>
 
       {/* Nav */}
@@ -37,30 +47,30 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
           <p className="px-2 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Menú</p>
         )}
         {role !== 'administracion' && (
-          <NavItem href="/" icon={<LayoutDashboard className="w-5 h-5 shrink-0" />} label="Dashboard" isCollapsed={isCollapsed} active={pathname === '/'} />
+          <NavItem onClick={onMobileClose} href="/" icon={<LayoutDashboard className="w-5 h-5 shrink-0" />} label="Dashboard" isCollapsed={isCollapsed} active={pathname === '/'} />
         )}
-        <NavItem href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Fc. Recibidas" shortLabel="Fc.Rec" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
-        <NavItem href="/gastos" icon={<BarChart3 className="w-5 h-5 shrink-0" />} label="Análisis Gastos" shortLabel="Análisis" isCollapsed={isCollapsed} active={pathname?.startsWith('/gastos')}
+        <NavItem onClick={onMobileClose} href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Fc. Recibidas" shortLabel="Fc.Rec" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
+        <NavItem onClick={onMobileClose} href="/gastos" icon={<BarChart3 className="w-5 h-5 shrink-0" />} label="Análisis Gastos" shortLabel="Análisis" isCollapsed={isCollapsed} active={pathname?.startsWith('/gastos')}
           colorClass="text-violet-600 hover:text-violet-700 hover:bg-violet-50/60 dark:text-violet-400 dark:hover:bg-violet-500/10" />
-        <NavItem href="/suplidos" icon={<CreditCard className="w-5 h-5 shrink-0" />} label="Suplidos" shortLabel="Suplidos" isCollapsed={isCollapsed} active={pathname === '/suplidos'} />
-        <NavItem href="/proveedores" icon={<Settings className="w-5 h-5 shrink-0" />} label="Proveedores" shortLabel="Provee." isCollapsed={isCollapsed} active={pathname === '/proveedores'} />
-        <NavItem href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" shortLabel="Mov.Banc" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
-        <NavItem href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" shortLabel="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
+        <NavItem onClick={onMobileClose} href="/suplidos" icon={<CreditCard className="w-5 h-5 shrink-0" />} label="Suplidos" shortLabel="Suplidos" isCollapsed={isCollapsed} active={pathname === '/suplidos'} />
+        <NavItem onClick={onMobileClose} href="/proveedores" icon={<Settings className="w-5 h-5 shrink-0" />} label="Proveedores" shortLabel="Provee." isCollapsed={isCollapsed} active={pathname === '/proveedores'} />
+        <NavItem onClick={onMobileClose} href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" shortLabel="Mov.Banc" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
+        <NavItem onClick={onMobileClose} href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" shortLabel="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
         {role !== 'administracion' && (
           <>
-            <NavItem href="/impuestos" icon={<Landmark className="w-5 h-5 shrink-0" />} label="Impuestos" shortLabel="Imptos." isCollapsed={isCollapsed} active={pathname?.startsWith('/impuestos')}
+            <NavItem onClick={onMobileClose} href="/impuestos" icon={<Landmark className="w-5 h-5 shrink-0" />} label="Impuestos" shortLabel="Imptos." isCollapsed={isCollapsed} active={pathname?.startsWith('/impuestos')}
               colorClass="text-amber-600 hover:text-amber-700 hover:bg-amber-50/60 dark:text-amber-400 dark:hover:bg-amber-500/10" />
-            <NavItem href="/nominas" icon={<Users className="w-5 h-5 shrink-0" />} label="Nóminas" shortLabel="Nóminas" isCollapsed={isCollapsed} active={pathname?.startsWith('/nominas')}
+            <NavItem onClick={onMobileClose} href="/nominas" icon={<Users className="w-5 h-5 shrink-0" />} label="Nóminas" shortLabel="Nóminas" isCollapsed={isCollapsed} active={pathname?.startsWith('/nominas')}
               colorClass="text-pink-600 hover:text-pink-700 hover:bg-pink-50/60 dark:text-pink-400 dark:hover:bg-pink-500/10" />
           </>
         )}
-        <NavItem href="/papelera" icon={<Trash2 className="w-5 h-5 shrink-0" />} label="Papelera" shortLabel="Papelera" isCollapsed={isCollapsed} active={pathname === '/papelera'}
+        <NavItem onClick={onMobileClose} href="/papelera" icon={<Trash2 className="w-5 h-5 shrink-0" />} label="Papelera" shortLabel="Papelera" isCollapsed={isCollapsed} active={pathname === '/papelera'}
           colorClass="text-red-500 hover:text-red-600 hover:bg-red-50/60 dark:text-red-400 dark:hover:bg-red-500/10" />
 
         {!isCollapsed && (
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Sistema</p>
         )}
-        <NavItem href="/ajustes" icon={<SlidersHorizontal className="w-5 h-5 shrink-0" />} label="Ajustes" shortLabel="Ajustes" isCollapsed={isCollapsed} active={pathname === '/ajustes'} />
+        <NavItem onClick={onMobileClose} href="/ajustes" icon={<SlidersHorizontal className="w-5 h-5 shrink-0" />} label="Ajustes" shortLabel="Ajustes" isCollapsed={isCollapsed} active={pathname === '/ajustes'} />
       </nav>
 
       {/* User Footer */}
@@ -86,8 +96,8 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
   );
 }
 
-function NavItem({ href, icon, label, shortLabel, isCollapsed, active, colorClass }: {
-  href: string; icon: React.ReactNode; label: string; shortLabel?: string; isCollapsed: boolean; active?: boolean; colorClass?: string;
+function NavItem({ href, icon, label, shortLabel, isCollapsed, active, colorClass, onClick }: {
+  href: string; icon: React.ReactNode; label: string; shortLabel?: string; isCollapsed: boolean; active?: boolean; colorClass?: string; onClick?: () => void;
 }) {
   const activeClass = "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 font-semibold";
   const defaultClass = "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/60 dark:hover:bg-white/5";
@@ -96,6 +106,7 @@ function NavItem({ href, icon, label, shortLabel, isCollapsed, active, colorClas
   return (
     <Link
       href={href}
+      onClick={onClick}
       title={isCollapsed && !shortLabel ? label : undefined}
       className={`flex items-center gap-3 rounded-xl font-medium transition-all duration-200 ${finalClass} ${isCollapsed ? 'p-2.5 justify-center flex-col gap-1' : 'px-3 py-2.5'}`}
     >
