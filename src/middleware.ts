@@ -25,6 +25,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Role check: only direccion can access /impuestos
+  if (payload.role !== 'direccion' && pathname.startsWith('/impuestos')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/facturas'
+    return NextResponse.redirect(url)
+  }
+
   return NextResponse.next()
 }
 
