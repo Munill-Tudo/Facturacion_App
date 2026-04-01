@@ -47,8 +47,12 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean,
         <NavItem href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" shortLabel="Mov.Banc" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
         <NavItem href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" shortLabel="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
         {role !== 'administracion' && (
-          <NavItem href="/impuestos" icon={<Landmark className="w-5 h-5 shrink-0" />} label="Impuestos" shortLabel="Imptos." isCollapsed={isCollapsed} active={pathname?.startsWith('/impuestos')}
-            colorClass="text-amber-600 hover:text-amber-700 hover:bg-amber-50/60 dark:text-amber-400 dark:hover:bg-amber-500/10" />
+          <>
+            <NavItem href="/impuestos" icon={<Landmark className="w-5 h-5 shrink-0" />} label="Impuestos" shortLabel="Imptos." isCollapsed={isCollapsed} active={pathname?.startsWith('/impuestos')}
+              colorClass="text-amber-600 hover:text-amber-700 hover:bg-amber-50/60 dark:text-amber-400 dark:hover:bg-amber-500/10" />
+            <NavItem href="/nominas" icon={<Users className="w-5 h-5 shrink-0" />} label="Nóminas" shortLabel="Nóminas" isCollapsed={isCollapsed} active={pathname?.startsWith('/nominas')}
+              colorClass="text-pink-600 hover:text-pink-700 hover:bg-pink-50/60 dark:text-pink-400 dark:hover:bg-pink-500/10" />
+          </>
         )}
         <NavItem href="/papelera" icon={<Trash2 className="w-5 h-5 shrink-0" />} label="Papelera" shortLabel="Papelera" isCollapsed={isCollapsed} active={pathname === '/papelera'}
           colorClass="text-red-500 hover:text-red-600 hover:bg-red-50/60 dark:text-red-400 dark:hover:bg-red-500/10" />

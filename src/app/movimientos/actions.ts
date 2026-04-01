@@ -56,6 +56,7 @@ export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
 
   // Desencadenar auto-conciliador inteligente
   const resAuto = await autoConciliarPagos();
+  const resEscaneo = await autoEscanearNominasEImpuestos();
 
   revalidatePath('/movimientos');
   revalidatePath('/conciliacion');
@@ -308,4 +309,161 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
   }
 
   return { conciliados, errores };
+}
+
+// ─── Motor de Extracción: Nóminas e Impuestos ───────────────────────────────
+
+export async function autoEscanearNominasEImpuestos(): Promise<{ procesados: number; errores: string[] }> {
+  let procesados = 0;
+  const errores: string[] = [];
+
+  try {
+    // 1. Obtener todos los movimientos pendientes (pagos negativos)
+    const { data: pendientes, error: errPend } = await supabase
+      .from('movimientos')
+      .select('*')
+      .eq('estado_conciliacion', 'Pendiente')
+      .eq('tipo', 'Pago');
+
+    if (errPend) throw errPend;
+    if (!pendientes || pendientes.length === 0) return { procesados: 0, errores: [] };
+
+    for (const mov of pendientes) {
+      const concepto = (mov.concepto || '').toUpperCase();
+      const obs = (mov.observaciones || '').toUpperCase();
+      const rawText = `${concepto} ${obs}`;
+
+      // A) NÓMINAS
+      if (rawText.includes('PAGO DE NOMINAS POR SU CUENTA') || rawText.includes('NOMINA')) {
+        // Observación típica: "NOMINA LAURA GARCIA MORAL MUNILL ABOGADOS SLP - MARZO 2026"
+        // Regex: /NOMINA\s+(.*?)\s+MUNILL ABOGADOS.*-\s+(.*)/i
+        let empleado = 'Empleado Desconocido';
+        let periodo = 'Periodo Desconocido';
+
+        const match = obs.match(/NOMINA\s+(.*?)\s+MUNILL ABOGADOS.*?-\s+(.*)/i);
+        if (match) {
+          empleado = match[1].trim();
+          periodo = match[2].trim();
+        } else {
+          // Fallback, tratar de extraer algo razonable o usar por defecto
+          empleado = 'Revisar Empleado';
+          periodo = mov.fecha.substring(0, 7); // YYYY-MM
+        }
+
+        // Crear registro en nominas
+        const { error: errNom } = await supabase.from('nominas').insert([{
+          empleado,
+          periodo,
+          importe: Math.abs(Number(mov.importe)),
+          fecha_pago: mov.fecha,
+          estado: 'Conciliado',
+          movimiento_id: mov.id
+        }]);
+
+        if (errNom) {
+          errores.push(`Error creando nómina mov ${mov.id}: ${errNom.message}`);
+          continue;
+        }
+
+        // Marcar movimiento como conciliado
+        await supabase.from('movimientos').update({
+          estado_conciliacion: 'Conciliado',
+          cliente_expediente: `Nómina: ${empleado} (${periodo})`
+        }).eq('id', mov.id);
+
+        procesados++;
+        continue;
+      }
+
+      // B) IMPUESTOS - SEGURIDAD SOCIAL
+      if (rawText.includes('TGSS') || rawText.includes('SEGUROS SOCIALES') || rawText.includes('COTIZACION')) {
+        const { error: errImp } = await supabase.from('impuestos').insert([{
+          concepto: mov.concepto,
+          tipo: 'Mensual',
+          periodo: mov.fecha.substring(0, 7), // YYYY-MM
+          importe: Math.abs(Number(mov.importe)),
+          fecha_devengo: mov.fecha,
+          fecha_pago: mov.fecha,
+          estado: 'Conciliado',
+          movimiento_id: mov.id,
+          notas: 'Auto-detectado Seguridad Social'
+        }]);
+
+        if (errImp) {
+          errores.push(`Error creando impuesto TGSS mov ${mov.id}: ${errImp.message}`);
+          continue;
+        }
+
+        await supabase.from('movimientos').update({
+          estado_conciliacion: 'Conciliado',
+          cliente_expediente: `Impuesto (Seguridad Social)`
+        }).eq('id', mov.id);
+
+        procesados++;
+        continue;
+      }
+
+      // C) IMPUESTOS - AYUNTAMIENTO
+      if (rawText.includes('RECAUDACION MUNICIPAL') || rawText.includes('AJUNTAMENT') || rawText.includes('AYUNTAMIENTO')) {
+        const { error: errImp } = await supabase.from('impuestos').insert([{
+          concepto: mov.concepto,
+          tipo: 'Ayuntamiento',
+          periodo: new Date(mov.fecha).getFullYear().toString(),
+          importe: Math.abs(Number(mov.importe)),
+          fecha_devengo: mov.fecha,
+          fecha_pago: mov.fecha,
+          estado: 'Conciliado',
+          movimiento_id: mov.id,
+          notas: 'Auto-detectado Ayuntamiento'
+        }]);
+
+        if (errImp) {
+          errores.push(`Error creando impuesto Ayto mov ${mov.id}: ${errImp.message}`);
+          continue;
+        }
+
+        await supabase.from('movimientos').update({
+          estado_conciliacion: 'Conciliado',
+          cliente_expediente: `Impuesto (Ayuntamiento)`
+        }).eq('id', mov.id);
+
+        procesados++;
+        continue;
+      }
+
+      // D) IMPUESTOS - AEAT
+      if (rawText.includes('AEAT') || rawText.includes('AGENCIA TRIBUTARIA') || rawText.includes('IMPUESTO')) {
+        const { error: errImp } = await supabase.from('impuestos').insert([{
+          concepto: mov.concepto,
+          tipo: 'Trimestral', // Por defecto; el usuario puede revisarlo
+          periodo: new Date(mov.fecha).getFullYear().toString(),
+          importe: Math.abs(Number(mov.importe)),
+          fecha_devengo: mov.fecha,
+          fecha_pago: mov.fecha,
+          estado: 'Conciliado',
+          movimiento_id: mov.id,
+          notas: 'Auto-detectado Agencia Tributaria'
+        }]);
+
+        if (errImp) {
+          errores.push(`Error creando impuesto AEAT mov ${mov.id}: ${errImp.message}`);
+          continue;
+        }
+
+        await supabase.from('movimientos').update({
+          estado_conciliacion: 'Conciliado',
+          cliente_expediente: `Impuesto (Agencia Tributaria)`
+        }).eq('id', mov.id);
+
+        procesados++;
+        continue;
+      }
+    }
+
+  } catch (err: any) {
+    console.error("Error en motor de extracción:", err);
+    errores.push(err?.message || 'Error desconocido');
+  }
+
+  return { procesados, errores };
 }

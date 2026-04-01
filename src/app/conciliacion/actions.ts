@@ -2,7 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
-import { autoConciliarPagos } from "@/app/movimientos/actions";
+import { autoConciliarPagos, autoEscanearNominasEImpuestos } from "@/app/movimientos/actions";
 
 export async function asociarPagoAFactura(movimientoId: string, facturaId: number) {
   // 1. Obtener datos de la factura para rellenar el nombre en el movimiento
@@ -50,11 +50,17 @@ export async function asignarCobroACliente(movimientoId: string, clienteExpedien
  */
 export async function lanzarAutoConciliacion(): Promise<{ conciliados: number; errores: string[] }> {
   const resultado = await autoConciliarPagos();
+  const resNominasEImpuestos = await autoEscanearNominasEImpuestos();
 
   revalidatePath('/');
   revalidatePath('/facturas');
   revalidatePath('/conciliacion');
   revalidatePath('/movimientos');
+  revalidatePath('/nominas');
+  revalidatePath('/impuestos');
 
-  return resultado;
+  return {
+    conciliados: resultado.conciliados + resNominasEImpuestos.procesados,
+    errores: [...resultado.errores, ...resNominasEImpuestos.errores],
+  };
 }
