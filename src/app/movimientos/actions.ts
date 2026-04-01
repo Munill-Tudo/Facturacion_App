@@ -432,7 +432,8 @@ export async function autoEscanearNominasEImpuestos(): Promise<{ procesados: num
       }
 
       // D) IMPUESTOS - AEAT
-      if (rawText.includes('AEAT') || rawText.includes('AGENCIA TRIBUTARIA') || rawText.includes('IMPUESTO')) {
+      const esPagoTarjeta = rawText.includes('PAGO CON TARJETA DE TASA') || rawText.includes('TARJETA');
+      if (!esPagoTarjeta && (rawText.includes('AEAT') || rawText.includes('AGENCIA TRIBUTARIA') || rawText.includes('IMPUESTO'))) {
         const { error: errImp } = await supabase.from('impuestos').insert([{
           concepto: mov.concepto,
           tipo: 'Trimestral', // Por defecto; el usuario puede revisarlo
