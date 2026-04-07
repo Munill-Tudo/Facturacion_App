@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { Search, Calendar, ExternalLink, ChevronDown, CheckSquare, Trash2, GripVertical } from 'lucide-react';
+import { Search, Calendar, ExternalLink, ChevronDown, CheckSquare, Trash2, GripVertical, Download } from 'lucide-react';
+import { exportToXlsx } from '@/lib/exportXlsx';
 import { TipoSelect } from '@/components/facturas/TipoSelect';
 import { EditableCell } from '@/components/facturas/EditableCell';
 import { EstadoSelect } from '@/components/facturas/EstadoSelect';
@@ -202,6 +203,26 @@ export function SuplidosTableClient({ data }: { data: any[] }) {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar proveedor, expediente..."
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-black outline-none" />
           </div>
+          <button
+            onClick={() => exportToXlsx(filtered, [
+              { header: 'Nº Rec.', key: 'id', format: (v) => `Fc.Rec.-${String(v).padStart(4, '0')}` },
+              { header: 'Fecha', key: 'fecha', format: v => v ? new Date(v).toLocaleDateString('es-ES') : '' },
+              { header: 'Fecha Pago', key: 'fecha_pago', format: v => v ? new Date(v).toLocaleDateString('es-ES') : '' },
+              { header: 'Proveedor', key: 'nombre_proveedor', format: (v, r) => v || r.cliente || '' },
+              { header: 'Nº Expediente', key: 'num_expediente' },
+              { header: 'Cliente', key: 'cliente_expediente' },
+              { header: 'Tipo', key: 'tipo' },
+              { header: 'Base Imponible', key: 'total_base', format: v => v != null ? Number(v).toFixed(2) : '' },
+              { header: 'IVA (€)', key: 'total_iva', format: v => v != null ? Number(v).toFixed(2) : '' },
+              { header: 'IRPF (€)', key: 'total_irpf', format: v => v != null && v !== 0 ? Number(v).toFixed(2) : '' },
+              { header: 'Total Factura', key: 'importe', format: v => v != null ? Number(v).toFixed(2) : '' },
+              { header: 'Deuda Cliente', key: 'importe', format: (v, r) => ((Number(r.importe) || 0) + Math.abs(Number(r.total_irpf) || 0)).toFixed(2) },
+              { header: 'Estado', key: 'estado' },
+            ], `Suplidos_${new Date().toISOString().slice(0,10)}`)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/20 rounded-xl transition-colors shrink-0"
+          >
+            <Download className="w-4 h-4" /> Exportar XLSX
+          </button>
         </div>
       </div>
 
