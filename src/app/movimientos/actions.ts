@@ -96,13 +96,33 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
     if (facturasErr) throw facturasErr;
     if (!facturas || facturas.length === 0) return { conciliados: 0, errores: [] };
 
+    // 2b. Obtener la suma de movimientos ya conciliados para estas facturas (Pagos Parciales)
+    const facturasIds = facturas.map(f => f.id);
+    const { data: movsConciliados, error: errMovs } = await supabase
+      .from('movimientos')
+      .select('factura_id, importe')
+      .in('factura_id', facturasIds)
+      .eq('estado_conciliacion', 'Conciliado');
+
+    if (errMovs) throw errMovs;
+
+    const pagadoPorFactura: Record<number, number> = {};
+    for (const id of facturasIds) pagadoPorFactura[id] = 0;
+    for (const m of (movsConciliados || [])) {
+      if (m.factura_id) {
+        pagadoPorFactura[m.factura_id] += Math.abs(Number(m.importe));
+      }
+    }
+
     // Preparar facturas normalizadas en memoria
     const facturasNorm = facturas.map(f => {
       const rf_raw = extraerYValidarISO11649(f.nombre_proveedor || '') || extraerYValidarISO11649(f.cliente || '');
+      const pagado = pagadoPorFactura[f.id] || 0;
       return {
         ...f,
         firma_contrapartida: obtenerFirmaContrapartida(f.nombre_proveedor || f.cliente || ''),
-        referencia_rf: rf_raw // Si hubiera campo en BD se usaría ese, temporalmente extraemos del texto
+        referencia_rf: rf_raw, // Si hubiera campo en BD se usaría ese, temporalmente extraemos del texto
+        saldo_pendiente: Number(f.importe) - pagado
       };
     });
 
@@ -135,8 +155,8 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
 
       // --- PASADA C: Regla 1:1 Mismo Importe + Contrapartida Estricta ---
       if (!facturaElegida) {
-        // En esta capa, SI O SI el importe tiene que cruzar al 100%
-        const candidatasImporte = facturasDisponibles.filter(f => Math.abs(Number(f.importe)) === absImporte);
+        // En esta capa, SI O SI el importe tiene que cruzar al 100% con el SALDO PENDIENTE (Tolerancia 5 cents)
+        const candidatasImporte = facturasDisponibles.filter(f => Math.abs(f.saldo_pendiente - absImporte) < 0.05);
         
         if (candidatasImporte.length > 0) {
           // Extraemos firma de la contrapartida en el banco
@@ -169,10 +189,29 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
              } else if (candidatasFuertes.length > 1) {
                 // EXCEPCIÓN: Varias facturas del MISMO IMPORTE y MISMO PROVEEDOR. No adivinamos.
                 console.warn(`[AutoConciliación] Ambigüedad: Movimiento ${mov.id} ${absImporte} tiene múltiples facturas de idéntico proveedor.`);
-                errores.push(`Movimiento ${mov.id}: Varias facturas del mismo importe y proveedor. Requiere revisión manual.`);
+                errores.push(`Movimiento ${mov.id}: Varias facturas del saldo pendiente y proveedor idénticos. Requiere revisión manual.`);
              }
           }
         }
+      }
+
+      // --- PASADA D: Pagos Parciales Lógicos FIFO (N:1) ---
+      if (!facturaElegida) {
+         const firmaBanco = obtenerFirmaContrapartida(strBanco);
+         if (firmaBanco.length > 5) {
+             // Buscamos facturas cuya firma principal esté en el banco
+             // Excluyendo facturas que ya no tienen saldo suficiente para absorber entero este movimiento (tolerancia 5 cents)
+             const candidatasNombre = facturasDisponibles.filter(f => 
+                  f.firma_contrapartida.length > 3 && 
+                  firmaBanco.includes(f.firma_contrapartida) &&
+                  f.saldo_pendiente >= (absImporte - 0.05)
+             ).sort((a,b) => a.id - b.id); // Orden FIFO: la más antigua primero
+             
+             if (candidatasNombre.length > 0) {
+                 facturaElegida = candidatasNombre[0];
+                 pasoConciliacion = 'PASADA D (Asignación Parcial FIFO)';
+             }
+         }
       }
 
       // --- APLICAR CONCILIACIÓN si hubo victoria clara ---
@@ -194,11 +233,22 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
           continue;
         }
 
+        // Restar el pago al saldo pendiente en memoria para la siguiente iteración de movimientos
+        facturaElegida.saldo_pendiente -= absImporte;
+        
+        let nuevoEstado = 'Pendiente';
+        if (facturaElegida.saldo_pendiente < 0.05) {
+            nuevoEstado = 'Pagada';
+            // Quitar de facturas disponibles ya que su saldo quedó en 0
+            const idx = facturasDisponibles.findIndex(f => f.id === facturaElegida.id);
+            if (idx > -1) facturasDisponibles.splice(idx, 1);
+        }
+
         const { error: updFact } = await supabase
           .from('facturas')
           .update({
-            estado: 'Pagada',
-            fecha_pago: mov.fecha,
+            estado: nuevoEstado,
+            fecha_pago: nuevoEstado === 'Pagada' ? mov.fecha : facturaElegida.fecha_pago,
           })
           .eq('id', facturaElegida.id);
 
@@ -207,12 +257,8 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
           continue;
         }
 
-        // Quitar de disponibles para no reutilizar en la misma sesión
-        const idx = facturasDisponibles.findIndex(f => f.id === facturaElegida.id);
-        if (idx > -1) facturasDisponibles.splice(idx, 1);
-
         console.log(
-          `[AutoConciliación] ✅ [${pasoConciliacion}] -> Movimiento ${mov.id} (${absImporte}€) -> Fact. #${facturaElegida.id}`
+          `[AutoConciliación] ✅ [${pasoConciliacion}] -> Movimiento ${mov.id} (${absImporte}€) -> Fact. #${facturaElegida.id} (${nuevoEstado === 'Pagada' ? 'Liquidada Válida' : `Restan ${facturaElegida.saldo_pendiente.toFixed(2)}€`})`
         );
         conciliados++;
       }
