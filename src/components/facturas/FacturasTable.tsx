@@ -55,7 +55,7 @@ interface Factura {
   tipo?: string; total_base?: number; total_iva?: number; total_irpf?: number;
   importe?: number; estado?: string; file_url?: string; archivo_url?: string;
   tipo_gasto?: string; subtipo_gasto?: string; numero_recepcion?: string;
-  concepto?: string;
+  concepto?: string; referencia_rf?: string;
 }
 
 // Module-level to avoid re-creation every render
@@ -111,7 +111,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
   };
 
   const { widths, onMouseDown } = useResizableColumns('cols_facturas', {
-    num_rec: 110, fecha: 90, fecha_pago: 90, proveedor: 180, concepto: 160,
+    rf: 140, num_rec: 110, fecha: 90, fecha_pago: 90, proveedor: 180, concepto: 160,
     tipo_gasto: 160, tipo: 90, base: 90, iva: 80, pct_iva: 70, 
     irpf: 80, pct_irpf: 72, total: 90, estado: 110, acciones: 80,
   });
@@ -307,6 +307,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
           <button
             onClick={() => exportToXlsx(sortedData, [
               { header: 'Nº Factura', key: 'numero_recepcion', format: (v, r) => v || `Fc. Rec.-${String(r.id).padStart(4, '0')}` },
+              { header: 'Ref. RF', key: 'referencia_rf' },
               { header: 'Fecha', key: 'fecha', format: v => v ? new Date(v).toLocaleDateString('es-ES') : '' },
               { header: 'Fecha Pago', key: 'fecha_pago', format: v => v ? new Date(v).toLocaleDateString('es-ES') : '' },
               { header: 'Proveedor', key: 'nombre_proveedor', format: (v, r) => v || r.cliente || '' },
@@ -395,6 +396,7 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                     className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
                 </th>
                 {([
+                  ['rf',        'Referencia RF'],
                   ['num_rec',   'Nº Fac. Recibida'],
                   ['fecha',     'Fecha'],
                   ['fecha_pago','F. Pago'],
@@ -440,6 +442,9 @@ export function FacturasTable({ data }: { data: Factura[] }) {
                       checked={selectedIds.includes(inv.id)}
                       onChange={e => setSelectedIds(s => e.target.checked ? [...s, inv.id] : s.filter(id => id !== inv.id))}
                       className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" />
+                  </td>
+                  <td className="py-3 px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs tracking-wider" title={inv.referencia_rf || 'Generar al editar'}>
+                    {inv.referencia_rf || '—'}
                   </td>
                   <td className="py-3 px-4 font-mono font-medium text-emerald-600 dark:text-emerald-400 text-xs break-words" title={inv.numero_recepcion || `Fc. Rec.-${String(inv.id).padStart(4, '0')}`}>
                     {inv.numero_recepcion || `Fc. Rec.-${String(inv.id).padStart(4, '0')}`}

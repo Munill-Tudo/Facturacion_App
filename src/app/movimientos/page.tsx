@@ -89,6 +89,7 @@ export default function MovimientosPage() {
       { header: 'Tipo', key: 'tipo' },
       { header: 'Fecha', key: 'fecha', format: v => v ? new Date(v).toLocaleDateString('es-ES') : '' },
       { header: 'F. Valor', key: 'f_valor', format: v => v ? new Date(v).toLocaleDateString('es-ES') : '' },
+      { header: 'Ref. RF', key: 'referencia_rf' },
       { header: 'Código', key: 'codigo' },
       { header: 'Concepto', key: 'concepto' },
       { header: 'Beneficiario', key: 'beneficiario' },
@@ -224,7 +225,7 @@ export default function MovimientosPage() {
               <tr>
                 <th className="px-6 py-4 font-semibold shrink-0 w-16">Tipo</th>
                 <th className="px-6 py-4 font-semibold whitespace-nowrap">Fechas</th>
-                <th className="px-6 py-4 font-semibold">Cód.</th>
+                <th className="px-6 py-4 font-semibold">Ref. RF / Cód.</th>
                 <th className="px-6 py-4 font-semibold">Concepto / Beneficiario</th>
                 <th className="px-6 py-4 font-semibold">Observaciones / Detalles</th>
                 <th className="px-6 py-4 font-semibold">Estado</th>
@@ -256,7 +257,10 @@ export default function MovimientosPage() {
                         {mov.f_valor && <span className="text-xs text-gray-400">Val: {new Date(mov.f_valor).toLocaleDateString('es-ES')}</span>}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-500 dark:text-gray-400 font-mono text-xs">{mov.codigo || '-'}</td>
+                    <td className="px-6 py-4 font-mono text-xs">
+                      {mov.referencia_rf && <p className="font-bold text-indigo-600 dark:text-indigo-400 mb-1">{mov.referencia_rf}</p>}
+                      <p className="text-gray-500 dark:text-gray-400">{mov.codigo || '-'}</p>
+                    </td>
                     <td className="px-6 py-4">
                       <p className="font-medium text-gray-900 dark:text-white line-clamp-1">{mov.concepto}</p>
                       {mov.beneficiario && <p className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-1">{mov.beneficiario}</p>}
@@ -341,6 +345,7 @@ export default function MovimientosPage() {
                             Pendiente
                           </span>
                         )}
+                        {mov.referencia_rf && <span className="text-indigo-600 dark:text-indigo-400 font-mono font-bold text-[10px]">RF: {mov.referencia_rf}</span>}
                         {mov.codigo && <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px]">Cód: {mov.codigo}</span>}
                     </div>
                     {mov.remesa && <span className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Remesa: {mov.remesa}</span>}
