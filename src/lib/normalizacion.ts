@@ -120,3 +120,36 @@ export function generarHashTransaccion(fecha: string, concepto: string, importe:
   // Combinamos fecha, concepto normalizado y el importe preciso
   return `${fecha}_${normalizarTextoEstricto(concepto)}_${importe.toFixed(2)}`;
 }
+
+/**
+ * Genera una referencia RF ISO 11649 válida matemáticamente.
+ * Útil para asignarla a nuevas facturas.
+ */
+export function generarRFCreditorReference(seedText: string = ''): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let base = '';
+  // Generar 10 caracteres alfanuméricos aleatorios para evitar colisiones
+  for (let i = 0; i < 10; i++) {
+      base += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  // Añadimos algo de la semilla si existe
+  const combined = base + seedText.substring(0, 5).replace(/[^A-Z0-9]/ig, '').toUpperCase();
+  
+  // Algoritmo para Check Digit Modulo 97-10
+  // Para calcular 'RF' + check_digits, simulamos con '00'
+  const toMod = combined + "RF00";
+  let numericString = "";
+  for (let i = 0; i < toMod.length; i++) {
+      const code = toMod.charCodeAt(i);
+      if (code >= 65 && code <= 90) { // A-Z
+          numericString += (code - 55).toString();
+      } else { // 0-9
+          numericString += toMod[i];
+      }
+  }
+  
+  const remainder = modulo97(numericString);
+  const checkDigits = (98 - remainder).toString().padStart(2, '0');
+  
+  return `RF${checkDigits}${combined}`;
+}

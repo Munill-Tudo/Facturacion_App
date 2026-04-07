@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { buscarOCrearProveedorPorNIF } from '@/app/proveedores/actions';
+import { generarRFCreditorReference } from '@/lib/normalizacion';
 import OpenAI from 'openai';
 
 const SYSTEM_PROMPT = `Eres un asistente experto en contabilidad española analizando facturas recibidas por el despacho "Munill Abogados SLP" (CIF: B44650307).
@@ -123,6 +124,7 @@ export async function POST(request: Request) {
         tipo: tipoAsignado || null,
         tipo_gasto: tipoGastoAsignado,
         subtipo_gasto: subtipoGastoAsignado,
+        referencia_rf: generarRFCreditorReference(numero || ''),
         archivo_url: null, // Se actualizará después con la URL de Drive
       }])
       .select();

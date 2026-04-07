@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { buscarOCrearProveedorPorNIF } from '@/app/proveedores/actions';
+import { generarRFCreditorReference } from '@/lib/normalizacion';
 
 // Seguridad básica: Puedes definir un secreto en tu .env (.env.local)
 // N8N_WEBHOOK_SECRET=mi-secreto-super-seguro
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
           importe: parseFloat(importe), 
           estado, 
           tipo: tipoAsignado || null, // Novedad: Autoclasificación según maestro de proveedores
+          referencia_rf: generarRFCreditorReference(numero || ''),
           archivo_url: archivo_url || null
         }
       ])
