@@ -44,32 +44,54 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }
       {/* Nav */}
       <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto overflow-x-hidden">
         {!isCollapsed && (
-          <p className="px-2 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Menú</p>
+          <p className="px-2 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Principal</p>
         )}
         {role !== 'administracion' && (
           <NavItem onClick={onMobileClose} href="/" icon={<LayoutDashboard className="w-5 h-5 shrink-0" />} label="Dashboard" isCollapsed={isCollapsed} active={pathname === '/'} />
         )}
-        <NavItem onClick={onMobileClose} href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Fc. Recibidas" shortLabel="Fc.Rec" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
+
+        {/* SECTION: Ingresos */}
+        {!isCollapsed && (
+          <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Ingresos & Clientes</p>
+        )}
+        <NavItem onClick={onMobileClose} href="/emitidas" icon={<FileText className="w-5 h-5 shrink-0 text-emerald-500" />} label="Fc. Emitidas" shortLabel="Emitidas" isCollapsed={isCollapsed} active={pathname?.startsWith('/emitidas')} colorClass="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/60 dark:text-emerald-400 dark:hover:bg-emerald-500/10" />
+
+        {/* SECTION: Gastos & Proveedores */}
+        {!isCollapsed && (
+          <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Gastos & Proveedores</p>
+        )}
+        <NavItem onClick={onMobileClose} href="/facturas" icon={<FileText className="w-5 h-5 shrink-0" />} label="Fc. Recibidas" shortLabel="Recibidas" isCollapsed={isCollapsed} active={pathname?.startsWith('/facturas')} />
         <NavItem onClick={onMobileClose} href="/gastos" icon={<BarChart3 className="w-5 h-5 shrink-0" />} label="Análisis Gastos" shortLabel="Análisis" isCollapsed={isCollapsed} active={pathname?.startsWith('/gastos')}
           colorClass="text-violet-600 hover:text-violet-700 hover:bg-violet-50/60 dark:text-violet-400 dark:hover:bg-violet-500/10" />
         <NavItem onClick={onMobileClose} href="/suplidos" icon={<CreditCard className="w-5 h-5 shrink-0" />} label="Suplidos" shortLabel="Suplidos" isCollapsed={isCollapsed} active={pathname === '/suplidos'} />
         <NavItem onClick={onMobileClose} href="/proveedores" icon={<Settings className="w-5 h-5 shrink-0" />} label="Proveedores" shortLabel="Provee." isCollapsed={isCollapsed} active={pathname === '/proveedores'} />
+
+        {/* SECTION: Bancos y Tesorería */}
+        {!isCollapsed && (
+          <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Tesorería</p>
+        )}
         <NavItem onClick={onMobileClose} href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" shortLabel="Mov.Banc" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
         <NavItem onClick={onMobileClose} href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" shortLabel="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
+        
+        {/* SECTION: Fiscal y Laboral */}
         {role !== 'administracion' && (
           <>
+            {!isCollapsed && (
+              <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Fiscal y Laboral</p>
+            )}
             <NavItem onClick={onMobileClose} href="/impuestos" icon={<Landmark className="w-5 h-5 shrink-0" />} label="Impuestos" shortLabel="Imptos." isCollapsed={isCollapsed} active={pathname?.startsWith('/impuestos')}
               colorClass="text-amber-600 hover:text-amber-700 hover:bg-amber-50/60 dark:text-amber-400 dark:hover:bg-amber-500/10" />
             <NavItem onClick={onMobileClose} href="/nominas" icon={<Users className="w-5 h-5 shrink-0" />} label="Nóminas" shortLabel="Nóminas" isCollapsed={isCollapsed} active={pathname?.startsWith('/nominas')}
               colorClass="text-pink-600 hover:text-pink-700 hover:bg-pink-50/60 dark:text-pink-400 dark:hover:bg-pink-500/10" />
           </>
         )}
-        <NavItem onClick={onMobileClose} href="/papelera" icon={<Trash2 className="w-5 h-5 shrink-0" />} label="Papelera" shortLabel="Papelera" isCollapsed={isCollapsed} active={pathname === '/papelera'}
-          colorClass="text-red-500 hover:text-red-600 hover:bg-red-50/60 dark:text-red-400 dark:hover:bg-red-500/10" />
-
+        
+        {/* SECTION: Sistema */}
         {!isCollapsed && (
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Sistema</p>
         )}
+        <NavItem onClick={onMobileClose} href="/papelera" icon={<Trash2 className="w-5 h-5 shrink-0" />} label="Papelera" shortLabel="Papelera" isCollapsed={isCollapsed} active={pathname === '/papelera'}
+          colorClass="text-red-500 hover:text-red-600 hover:bg-red-50/60 dark:text-red-400 dark:hover:bg-red-500/10" />
         <NavItem onClick={onMobileClose} href="/ajustes" icon={<SlidersHorizontal className="w-5 h-5 shrink-0" />} label="Ajustes" shortLabel="Ajustes" isCollapsed={isCollapsed} active={pathname === '/ajustes'} />
       </nav>
 
