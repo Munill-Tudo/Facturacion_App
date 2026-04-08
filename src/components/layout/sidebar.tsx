@@ -55,6 +55,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Ingresos & Clientes</p>
         )}
         <NavItem onClick={onMobileClose} href="/emitidas" icon={<FileText className="w-5 h-5 shrink-0 text-emerald-500" />} label="Fc. Emitidas" shortLabel="Emitidas" isCollapsed={isCollapsed} active={pathname?.startsWith('/emitidas')} colorClass="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/60 dark:text-emerald-400 dark:hover:bg-emerald-500/10" />
+        <NavItem onClick={onMobileClose} href="/clientes" icon={<Users className="w-5 h-5 shrink-0 text-emerald-500" />} label="Clientes" shortLabel="Clientes" isCollapsed={isCollapsed} active={pathname === '/clientes'} colorClass="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/60 dark:text-emerald-400 dark:hover:bg-emerald-500/10" />
 
         {/* SECTION: Gastos & Proveedores */}
         {!isCollapsed && (

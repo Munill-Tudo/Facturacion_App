@@ -1,18 +1,26 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { generarRFCreditorReference } from '@/lib/normalizacion';
+import { buscarOCrearClientePorNIF } from '@/app/clientes/actions';
 import OpenAI from 'openai';
 
 const SYSTEM_PROMPT = `Eres un asistente experto en contabilidad española analizando facturas EMITIDAS por el despacho "Munill Abogados SLP" o "Munill-Tudó Abogados" (CIF: B44650307).
 
-REGLA CRÍTICA: La empresa "Munill Abogados SLP" o "Munill-Tudó Abogados" es el EMISOR de la factura. Tu tarea es extraer los datos del CLIENTE/DESTINATARIO: la persona o empresa a la que se le factura el servicio y que DEBE PAGAR.
+REGLA CRÍTICA: La empresa "Munill Abogados SLP" o "Munill-Tudó Abogados" es el EMISOR de las facturas. Tu tarea es extraer los datos de los CLIENTES/DESTINATARIOS: la persona o empresa a la que se le factura el servicio y que DEBE PAGAR.
 
-Si un dato no existe, devuelve null. Valores numéricos sin símbolos de moneda. Formato de fecha YYYY-MM-DD.
+El documento adjunto puede contener MÚLTIPLES facturas (por ejemplo, una factura por página o varias facturas juntas).
+Tu trabajo es identificar CADA UNA de las facturas presentes en el documento y extraer sus datos.
+Devuelve SIEMPRE un documento JSON con una UNICA clave primaria llamada "facturas", que sea un ARRAY de objetos JSON, donde cada objeto represente una factura.
 
-Devuelve ÚNICAMENTE este JSON:
+Para CADA factura extraída, si un dato no existe, devuelve null. Valores numéricos sin símbolos de moneda. Formato de fecha YYYY-MM-DD.
+
+El formato JSON estricto esperado para cada objeto dentro del array 'facturas' es:
 - cliente (nombre del CLIENTE a quien se dirige la factura)
 - nif_cliente (CIF/NIF del CLIENTE)
+- direccion_cliente (Dirección postal del CLIENTE)
 - poblacion_cliente (Población del CLIENTE)
+- provincia_cliente (Provincia del CLIENTE)
+- cp_cliente (Código Postal del CLIENTE)
 - fecha (fecha de emisión de la factura, YYYY-MM-DD)
 - numero (número de factura)
 - concepto (descripción del servicio o producto facturado, un resumen corto)
@@ -55,7 +63,7 @@ export async function POST(request: Request) {
             },
             {
               type: 'input_text',
-              text: 'Extrae los datos de esta factura emitida en formato JSON.',
+              text: 'Extrae TODAS las facturas emitidas de este documento en el array JSON solicitado.',
             },
           ],
         },
@@ -68,91 +76,143 @@ export async function POST(request: Request) {
     const aiContent = response.output_text;
     if (!aiContent) throw new Error('No se pudo extraer el contenido con IA');
 
-    const extractedData = JSON.parse(aiContent);
-    const { fecha, cliente, concepto, importe, numero, nif_cliente, poblacion_cliente, total_base, total_iva, total_irpf } = extractedData;
+    let parsedData = JSON.parse(aiContent);
+    // Asegurarnos de que tenemos un array en parsedData.facturas
+    let facturasArray: any[] = [];
+    if (parsedData.facturas && Array.isArray(parsedData.facturas)) {
+      facturasArray = parsedData.facturas;
+    } else if (Array.isArray(parsedData)) {
+      facturasArray = parsedData;
+    } else {
+      // Si la IA devuelve un solo objeto suelto por error, lo forzamos a array
+      facturasArray = [parsedData];
+    }
 
-    if (!cliente || importe === undefined || importe === null) {
+    if (facturasArray.length === 0) {
       return NextResponse.json(
-        { error: 'No se pudieron extraer campos obligatorios (cliente, importe) del PDF.', extractedData },
+        { error: 'No se procesó ninguna factura válida a partir del documento.', AIResponse: parsedData },
         { status: 400 }
       );
     }
 
-    // 2. Insertar en Supabase facturas_emitidas
-    const { data: insertData, error: insertError } = await supabase
-      .from('facturas_emitidas')
-      .insert([{
-        numero: numero || null,
-        fecha: fecha || new Date().toISOString().split('T')[0],
-        cliente: cliente,
-        nif_cliente: nif_cliente || null,
-        poblacion_cliente: poblacion_cliente || null,
-        concepto: concepto || 'Venta referenciada',
-        total_base: total_base ? parseFloat(total_base) : null,
-        total_iva: total_iva ? parseFloat(total_iva) : null,
-        total_irpf: total_irpf ? parseFloat(total_irpf) : null,
-        importe: parseFloat(importe),
-        estado: 'Pendiente',
-        referencia_rf: generarRFCreditorReference(numero || ''),
-        archivo_url: null, // Se actualizará después con la URL de Drive en n8n si es necesario
-      }])
-      .select();
-
-    if (insertError) {
-      console.error('Error insertando en Supabase:', insertError);
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
-    }
-
-    const facturaId: number = insertData[0]?.id;
-
-    // 3. Subir archivo a Google Drive mediante n8n (opcional)
-    let archivo_url: string | null = null;
+    const insertedFacturas = [];
     const n8nDriveWebhook = process.env.N8N_DRIVE_WEBHOOK_URL;
+    
+    // Convert buffer to file once for all N8N requests if needed
+    const fileForN8n = new File([buffer], file.name || 'factura_emitida.pdf', {
+      type: file.type || 'application/pdf',
+    });
 
-    if (n8nDriveWebhook) {
-      try {
-        const fileForN8n = new File([buffer], file.name || 'factura_emitida.pdf', {
-          type: file.type || 'application/pdf',
-        });
+    // Procesar CADA factura encontrada
+    for (const extractedData of facturasArray) {
+       const { fecha, cliente, concepto, importe, numero, nif_cliente, direccion_cliente, poblacion_cliente, provincia_cliente, cp_cliente, total_base, total_iva, total_irpf } = extractedData;
 
-        const driveFormData = new FormData();
-        driveFormData.append('file', fileForN8n);
-        driveFormData.append('factura_emitida_id', String(facturaId));
-        driveFormData.append('factura_fecha', extractedData.fecha || '');
-        driveFormData.append('factura_cliente', extractedData.cliente || '');
-        driveFormData.append('factura_importe', String(extractedData.importe || 0));
-        driveFormData.append('factura_numero', extractedData.numero || '');
-        driveFormData.append('data', JSON.stringify(extractedData));
-        driveFormData.append('tipo_documento', 'Emitida'); // To inform n8n this is an outgoing invoice
+       if (!cliente || importe === undefined || importe === null) {
+         console.warn("Se saltó una factura por faltar datos críticos", extractedData);
+         continue; // Omitir facturas mal parseadas pero seguir con las demás
+       }
 
-        const n8nRes = await fetch(n8nDriveWebhook, {
-          method: 'POST',
-          body: driveFormData,
-        });
+       // 2. Logica CRM Clientes auto-creación
+       let _clienteObj = null;
+       try {
+           if (nif_cliente || cliente) {
+               _clienteObj = await buscarOCrearClientePorNIF({
+                   nif: nif_cliente || null,
+                   nombre: cliente,
+                   direccion: direccion_cliente || null,
+                   poblacion: poblacion_cliente || null,
+                   provincia: provincia_cliente || null,
+                   cp: cp_cliente || null,
+               });
+           }
+       } catch (err) {
+           console.error("Error auto-generando cliente en CRM", err);
+       }
 
-        if (n8nRes.ok) {
-          const n8nData = await n8nRes.json();
-          archivo_url = n8nData.archivo_url || null;
+       // 3. Insertar en Supabase facturas_emitidas
+       const rfFactura = generarRFCreditorReference(numero || '');
+       const { data: insertData, error: insertError } = await supabase
+         .from('facturas_emitidas')
+         .insert([{
+           numero: numero || null,
+           fecha: fecha || new Date().toISOString().split('T')[0],
+           cliente: cliente,
+           nif_cliente: nif_cliente || null,
+           poblacion_cliente: poblacion_cliente || null,
+           concepto: concepto || 'Venta referenciada',
+           total_base: total_base ? parseFloat(total_base) : null,
+           total_iva: total_iva ? parseFloat(total_iva) : null,
+           total_irpf: total_irpf ? parseFloat(total_irpf) : null,
+           importe: parseFloat(importe),
+           estado: 'Pendiente',
+           referencia_rf: rfFactura,
+           archivo_url: null, // Se actualizará después en n8n
+         }])
+         .select();
 
-          if (archivo_url && facturaId) {
-             await supabase.from('facturas_emitidas').update({ archivo_url }).eq('id', facturaId);
-          }
-        }
-      } catch (err: any) {
-        console.error('Error enviando el archivo de emitida al webhook de n8n para Drive:', err.message);
-      }
+       if (insertError) {
+         console.error('Error insertando factura:', insertError);
+         continue;
+       }
+
+       const facturaId = insertData[0]?.id;
+       let archivo_url = null;
+
+       // 4. Subir a GDrive mediante n8n (opcional) de cada una
+       // OJO: Se enviará el mismo PDF de multipágina por cada registro. 
+       // Si es un PDF con 4 facturas, n8n subirá el PDF 4 veces en las carpetas respectivas, lo cual suele ser el comportamiento deseado para trazar la procedencia de cada hoja, o pueden dividirse en el futuro.
+       if (n8nDriveWebhook && facturaId) {
+         try {
+           const driveFormData = new FormData();
+           driveFormData.append('file', fileForN8n);
+           driveFormData.append('factura_emitida_id', String(facturaId));
+           driveFormData.append('factura_fecha', fecha || '');
+           driveFormData.append('factura_cliente', cliente || '');
+           driveFormData.append('factura_importe', String(importe || 0));
+           driveFormData.append('factura_numero', numero || '');
+           driveFormData.append('data', JSON.stringify(extractedData));
+           driveFormData.append('tipo_documento', 'Emitida');
+           driveFormData.append('rf_factura', rfFactura);
+           if (_clienteObj?.referencia_rf) {
+               driveFormData.append('rf_cliente', _clienteObj.referencia_rf);
+           }
+
+           // Llamada en fire-and-forget o await
+           const n8nRes = await fetch(n8nDriveWebhook, { method: 'POST', body: driveFormData });
+           if (n8nRes.ok) {
+             const n8nData = await n8nRes.json();
+             archivo_url = n8nData.archivo_url || null;
+             if (archivo_url) {
+                await supabase.from('facturas_emitidas').update({ archivo_url }).eq('id', facturaId);
+             }
+           }
+         } catch (err: any) {
+           console.error('Error enviando a n8n:', err.message);
+         }
+       }
+
+       insertedFacturas.push({
+          ...insertData[0],
+          archivo_url
+       });
     }
 
+    if (insertedFacturas.length === 0) {
+        return NextResponse.json({ error: 'No se pudo insertar ninguna de las facturas leídas.' }, { status: 500 });
+    }
+
+    // Devolvemos success indicando la cantidad procesada. En el frontend se mostrará como único ítem pero sabemos que cargamos múltiples
     return NextResponse.json({
       success: true,
-      factura: { ...insertData[0], archivo_url },
-      extracted: extractedData,
+      factura: insertedFacturas[0], // para que el modal ponga check verde sobre el archivo (toma el primero al menos)
+      extracted: parsedData,
+      count: insertedFacturas.length
     });
 
   } catch (err: any) {
     console.error('Error en upload factura emitida:', err);
     return NextResponse.json(
-      { error: 'Error procesando la factura emitida', details: err.message },
+      { error: 'Error procesando el array de facturas', details: err.message },
       { status: 500 }
     );
   }
