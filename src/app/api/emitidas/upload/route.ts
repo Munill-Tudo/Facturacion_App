@@ -96,12 +96,6 @@ export async function POST(request: Request) {
     }
 
     const insertedFacturas = [];
-    const n8nDriveWebhook = process.env.N8N_DRIVE_WEBHOOK_URL;
-    
-    // Convert buffer to file once for all N8N requests if needed
-    const fileForN8n = new File([buffer], file.name || 'factura_emitida.pdf', {
-      type: file.type || 'application/pdf',
-    });
 
     // Procesar CADA factura encontrada
     for (const extractedData of facturasArray) {
@@ -157,39 +151,6 @@ export async function POST(request: Request) {
 
        const facturaId = insertData[0]?.id;
        let archivo_url = null;
-
-       // 4. Subir a GDrive mediante n8n (opcional) de cada una
-       // OJO: Se enviará el mismo PDF de multipágina por cada registro. 
-       // Si es un PDF con 4 facturas, n8n subirá el PDF 4 veces en las carpetas respectivas, lo cual suele ser el comportamiento deseado para trazar la procedencia de cada hoja, o pueden dividirse en el futuro.
-       if (n8nDriveWebhook && facturaId) {
-         try {
-           const driveFormData = new FormData();
-           driveFormData.append('file', fileForN8n);
-           driveFormData.append('factura_emitida_id', String(facturaId));
-           driveFormData.append('factura_fecha', fecha || '');
-           driveFormData.append('factura_cliente', cliente || '');
-           driveFormData.append('factura_importe', String(importe || 0));
-           driveFormData.append('factura_numero', numero || '');
-           driveFormData.append('data', JSON.stringify(extractedData));
-           driveFormData.append('tipo_documento', 'Emitida');
-           driveFormData.append('rf_factura', rfFactura);
-           if (_clienteObj?.referencia_rf) {
-               driveFormData.append('rf_cliente', _clienteObj.referencia_rf);
-           }
-
-           // Llamada en fire-and-forget o await
-           const n8nRes = await fetch(n8nDriveWebhook, { method: 'POST', body: driveFormData });
-           if (n8nRes.ok) {
-             const n8nData = await n8nRes.json();
-             archivo_url = n8nData.archivo_url || null;
-             if (archivo_url) {
-                await supabase.from('facturas_emitidas').update({ archivo_url }).eq('id', facturaId);
-             }
-           }
-         } catch (err: any) {
-           console.error('Error enviando a n8n:', err.message);
-         }
-       }
 
        insertedFacturas.push({
           ...insertData[0],
