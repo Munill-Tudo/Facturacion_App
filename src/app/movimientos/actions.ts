@@ -61,12 +61,13 @@ export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
 
   // Desencadenar auto-conciliador inteligente
   const resAuto = await autoConciliarPagos();
+  const resCobros = await autoConciliarCobros();
   const resEscaneo = await autoEscanearNominasEImpuestos();
 
   revalidatePath('/movimientos');
   revalidatePath('/conciliacion');
 
-  return { inserted: paraInsertar.length, duplicates, autoconciliados: resAuto.conciliados };
+  return { inserted: paraInsertar.length, duplicates, autoconciliados: resAuto.conciliados + resCobros.conciliados };
 }
 
 // ─── Motor principal de Autoconciliación (Pasadas Estrictas) ─────────────────
@@ -427,4 +428,173 @@ export async function autoEscanearNominasEImpuestos(): Promise<{ procesados: num
   }
 
   return { procesados, errores };
+}
+
+// ─── Motor de Conciliación de Ingresos y Remesas TPV ────────────────────────
+export async function autoConciliarCobros(): Promise<{ conciliados: number; errores: string[] }> {
+  let conciliados = 0;
+  const errores: string[] = [];
+
+  try {
+    // 1. Obtener ingresos pendientes
+    const { data: ingresos, error: ingErr } = await supabase
+      .from('movimientos')
+      .select('*')
+      .eq('estado_conciliacion', 'Pendiente')
+      .eq('tipo', 'Ingreso');
+
+    if (ingErr) throw ingErr;
+    if (!ingresos || ingresos.length === 0) return { conciliados: 0, errores: [] };
+
+    // 2. Obtener Facturas Emitidas pendientes
+    const { data: facturas, error: facturasErr } = await supabase
+      .from('facturas_emitidas')
+      .select('*')
+      .eq('estado', 'Pendiente')
+      .order('fecha', { ascending: true });
+
+    if (facturasErr) throw facturasErr;
+    if (!facturas || facturas.length === 0) return { conciliados: 0, errores: [] };
+
+    const facturasDisponibles = [...facturas];
+
+    for (const mov of ingresos) {
+      if (facturasDisponibles.length === 0) break;
+      const originalImporte = Number(mov.importe) || 0;
+      if (originalImporte <= 0) continue;
+
+      const strBanco = [mov.concepto, mov.beneficiario, mov.observaciones].filter(Boolean).join(' ').toUpperCase();
+
+      // --- MODO REMESA TPV ---
+      if (strBanco.includes('LIQUIDACION REMESA DE COMERCIOS') || strBanco.includes('LIQUIDACION REMESA')) {
+         const movDate = new Date(mov.fecha);
+         // Filtrar facturas emitidas hasta 7 días antes del movimiento
+         const fCandidatas = facturasDisponibles.filter(f => {
+            const fd = new Date(f.fecha);
+            const diffDays = (movDate.getTime() - fd.getTime()) / (1000 * 3600 * 24);
+            return diffDays >= -1 && diffDays <= 7;
+         });
+
+         if (fCandidatas.length > 0) {
+            const validSubsets: any[][] = [];
+            const dfs = (idx: number, currentSum: number, currentSubset: any[]) => {
+               // El banco ingresa MENOS, luego currentSum (facturas) debe ser MAYOR (facturas = banco + comisión)
+               // Aceptamos entre un 0% y un 2% extra sobre el ingreso como límite de comisión
+               const maxTolerado = originalImporte * 1.025; 
+               
+               // Pequeño margen para compensar redondeos: originalImporte - 0.05
+               if (currentSum >= (originalImporte - 0.05) && currentSum <= maxTolerado) {
+                   validSubsets.push([...currentSubset]);
+               }
+               if (currentSum > maxTolerado) return;
+               
+               for (let i = idx; i < fCandidatas.length; i++) {
+                   const f = fCandidatas[i];
+                   currentSubset.push(f);
+                   dfs(i + 1, currentSum + Number(f.importe), currentSubset);
+                   currentSubset.pop();
+               }
+            };
+            dfs(0, 0, []);
+
+            if (validSubsets.length > 0) {
+               // Ordenamos para coger el subset con menor diferencia (comisión más ajustada)
+               validSubsets.sort((a,b) => {
+                   const sa = a.reduce((acc, f) => acc + Number(f.importe), 0);
+                   const sb = b.reduce((acc, f) => acc + Number(f.importe), 0);
+                   return Math.abs(sa - originalImporte) - Math.abs(sb - originalImporte);
+               });
+
+               const bestSubset = validSubsets[0];
+               const totalSubset = bestSubset.reduce((acc, f) => acc + Number(f.importe), 0);
+               const comision = totalSubset - originalImporte;
+
+               const facturasIds = bestSubset.map((f: any) => f.numero || f.id);
+               
+               // 1. Marcar movimiento bancario
+               await supabase.from('movimientos').update({
+                  estado_conciliacion: 'Conciliado',
+                  cliente_expediente: `TPV Remesa (${facturasIds.length} fc: ${facturasIds.join(',')})`
+               }).eq('id', mov.id);
+
+               // 2. Marcar facturas involucradas
+               for (const f of bestSubset) {
+                  await supabase.from('facturas_emitidas').update({ estado: 'Pagada' }).eq('id', f.id);
+                  const idx = facturasDisponibles.findIndex(fd => fd.id === f.id);
+                  if (idx > -1) facturasDisponibles.splice(idx, 1);
+               }
+
+               // 3. Crear gasto automático por la comisión bancaria (Si > 0.05€)
+               if (comision > 0.05) {
+                  await supabase.from('movimientos').insert([{
+                     fecha: mov.fecha,
+                     concepto: 'Comisión TPV Bancaria (Auto)',
+                     observaciones: `Comisión retenida de la remesa de comercios. Fcs: ${facturasIds.join(',')}`,
+                     importe: -parseFloat(comision.toFixed(2)),
+                     tipo: 'Pago',
+                     estado_conciliacion: 'Conciliado',
+                     cliente_expediente: 'Liquidación TPV'
+                  }]);
+               }
+
+               conciliados++;
+               continue; // Siguiente movimiento
+            }
+         }
+      }
+
+      // --- MODO NORMAL (1:1 o Tolerancia Céntimos) ---
+      let facturaElegida: any = null;
+
+      // Por RF Maestro
+      const rfMovimiento = extraerYValidarISO11649(strBanco);
+      if (rfMovimiento) {
+         const candidatasRF = facturasDisponibles.filter(f => f.referencia_rf === rfMovimiento);
+         if (candidatasRF.length === 1) {
+             facturaElegida = candidatasRF[0];
+         }
+      }
+
+      // Por Tolerancia (±0.05)
+      if (!facturaElegida) {
+         const candidatasImporte = facturasDisponibles.filter(f => Math.abs(Number(f.importe) - originalImporte) <= 0.05);
+
+         if (candidatasImporte.length === 1) {
+             facturaElegida = candidatasImporte[0];
+         } else if (candidatasImporte.length > 1) {
+             // Desempate por nombre
+             const fnameMatched = candidatasImporte.filter(f => strBanco.includes(f.cliente.toUpperCase().split(' ')[0]));
+             if (fnameMatched.length === 1) facturaElegida = fnameMatched[0];
+         }
+      }
+
+      if (facturaElegida) {
+          const diferencia = originalImporte - Number(facturaElegida.importe);
+          
+          await supabase.from('movimientos').update({
+              estado_conciliacion: 'Conciliado',
+              factura_id: facturaElegida.id, // Si ampliamos el schema para soportarlo
+              cliente_expediente: facturaElegida.cliente
+          }).eq('id', mov.id);
+
+          await supabase.from('facturas_emitidas').update({ estado: 'Pagada' }).eq('id', facturaElegida.id);
+
+          // Si el cliente nos pagó mal (céntimos de diferencia), es asumible y se da por saldada
+          if (Math.abs(diferencia) > 0.005) {
+               // Podríamos crear un mini-movimiento de ajuste en el futuro.
+          }
+
+          const idx = facturasDisponibles.findIndex(fd => fd.id === facturaElegida.id);
+          if (idx > -1) facturasDisponibles.splice(idx, 1);
+
+          conciliados++;
+      }
+    }
+
+  } catch (err: any) {
+    console.error("Error auto-conciliando cobros:", err);
+    errores.push("Error cobros: " + err?.message);
+  }
+
+  return { conciliados, errores };
 }
