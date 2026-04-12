@@ -29,8 +29,8 @@ function getQuarterRange(year: number, quarter: number) {
   };
 }
 
-function sanitizePart(value: string | null | undefined) {
-  const clean = (value || 'sin_valor')
+function sanitizePart(value: string | number | null | undefined) {
+  const clean = String(value ?? 'sin_valor')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9._-]+/g, '_')
