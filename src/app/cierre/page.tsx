@@ -12,6 +12,7 @@ import {
   CalendarRange,
   Landmark,
   Users,
+  Download,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -314,12 +315,19 @@ export default async function CierrePage({
           <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
             <FolderKanban className="h-6 w-6" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">Cierre trimestral</h1>
             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Vista operativa del trimestre {range.label}. El objetivo es dejar cada movimiento bancario apoyado por su factura o justificante.
             </p>
           </div>
+          <Link
+            href={`/api/cierre/export?year=${year}&quarter=${quarter}`}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Excel
+          </Link>
         </div>
 
         <form method="GET" className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800 dark:bg-white/5 md:flex-row md:items-end">
@@ -327,8 +335,8 @@ export default async function CierrePage({
             <CalendarRange className="h-4 w-4 text-indigo-500" />
             Seleccionar trimestre
           </div>
-          <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-3">
-            <label className="text-sm">
+          <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-4">
+            <label className="text-sm md:col-span-1">
               <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Año</span>
               <select
                 name="year"
@@ -340,7 +348,7 @@ export default async function CierrePage({
                 ))}
               </select>
             </label>
-            <label className="text-sm">
+            <label className="text-sm md:col-span-1">
               <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Trimestre</span>
               <select
                 name="quarter"
@@ -353,7 +361,7 @@ export default async function CierrePage({
                 <option value="4">4T · Octubre a Diciembre</option>
               </select>
             </label>
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-2 md:col-span-2">
               <button
                 type="submit"
                 className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition-colors hover:bg-indigo-700"
