@@ -1,7 +1,18 @@
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { CheckCircle2, AlertTriangle, FileWarning, PiggyBank, FolderKanban, ArrowRight, Clock3, CalendarRange, Landmark, Users } from 'lucide-react';
+import {
+  CheckCircle2,
+  AlertTriangle,
+  FileWarning,
+  PiggyBank,
+  FolderKanban,
+  ArrowRight,
+  Clock3,
+  CalendarRange,
+  Landmark,
+  Users,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 function getCurrentQuarter(date = new Date()) {
@@ -122,6 +133,43 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
+function BlockTypeCard({
+  title,
+  value,
+  href,
+  hrefLabel,
+  tone = 'neutral',
+}: {
+  title: string;
+  value: number;
+  href: string;
+  hrefLabel: string;
+  tone?: 'neutral' | 'good' | 'warn';
+}) {
+  const toneClass =
+    tone === 'good'
+      ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/20 dark:bg-emerald-500/10'
+      : tone === 'warn'
+        ? 'border-amber-200 bg-amber-50/70 dark:border-amber-500/20 dark:bg-amber-500/10'
+        : 'border-gray-100 bg-white dark:border-gray-800 dark:bg-[#0a0a0a]';
+
+  return (
+    <div className={`rounded-3xl border p-5 shadow-sm ${toneClass}`}>
+      <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">{title}</p>
+      <p className="mt-2 text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white">{value}</p>
+      <div className="mt-4">
+        <Link
+          href={href}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+        >
+          {hrefLabel}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default async function CierrePage({
   searchParams,
 }: {
@@ -229,6 +277,11 @@ export default async function CierrePage({
   const emitidasPendientes = emitidasPendientesRes.count || 0;
   const impuestosSinDocumento = impuestosSinDocumentoRes.count || 0;
   const nominasSinDocumento = nominasSinDocumentoRes.count || 0;
+  const documentosPendientes = facturasSinArchivo + impuestosSinDocumento + nominasSinDocumento;
+  const cierreListo = movimientosPendientes === 0 && documentosPendientes === 0 && emitidasPendientes === 0;
+  const completionPct = movimientosTotales > 0
+    ? Math.max(0, Math.min(100, Math.round((movimientosListos / movimientosTotales) * 100)))
+    : 100;
 
   const movimientosPendientesList = movimientosPendientesListRes.data || [];
   const facturasSinArchivoList = facturasSinArchivoListRes.data || [];
@@ -353,6 +406,55 @@ export default async function CierrePage({
           subtitle="Laboral pendiente de soporte"
           tone={nominasSinDocumento > 0 ? 'warn' : 'good'}
           icon={<Users className="h-5 w-5" />}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
+        <div className={`xl:col-span-2 rounded-3xl border p-6 shadow-sm ${cierreListo ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/20 dark:bg-emerald-500/10' : 'border-amber-200 bg-amber-50/70 dark:border-amber-500/20 dark:bg-amber-500/10'}`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Estado del trimestre</p>
+              <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+                {cierreListo ? 'Listo para revisión final' : 'Bloqueado'}
+              </h2>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                {cierreListo
+                  ? 'No se detectan bloqueos básicos de conciliación, documentación o cobro para este trimestre.'
+                  : 'Aún quedan frentes abiertos antes de poder considerar este trimestre realmente cerrable.'}
+              </p>
+            </div>
+            <div className={`rounded-2xl p-3 ${cierreListo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'}`}>
+              {cierreListo ? <CheckCircle2 className="h-6 w-6" /> : <AlertTriangle className="h-6 w-6" />}
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-500 dark:text-gray-400">
+              <span>Avance por movimientos tratados</span>
+              <span>{completionPct}%</span>
+            </div>
+            <div className="mt-2 h-3 overflow-hidden rounded-full bg-white/70 dark:bg-white/10">
+              <div
+                className={`h-full rounded-full ${cierreListo ? 'bg-emerald-500' : 'bg-indigo-600'}`}
+                style={{ width: `${completionPct}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <BlockTypeCard
+          title="Pendiente conciliación"
+          value={movimientosPendientes}
+          href="/conciliacion"
+          hrefLabel="Resolver movimientos"
+          tone={movimientosPendientes > 0 ? 'warn' : 'good'}
+        />
+        <BlockTypeCard
+          title="Pendiente documentación"
+          value={documentosPendientes}
+          href="/facturas"
+          hrefLabel="Revisar soportes"
+          tone={documentosPendientes > 0 ? 'warn' : 'good'}
         />
       </div>
 
