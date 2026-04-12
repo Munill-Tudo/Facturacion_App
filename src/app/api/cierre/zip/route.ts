@@ -262,10 +262,14 @@ export async function GET(request: NextRequest) {
 
     zip.file('MANIFIESTO.txt', manifestLines.join('\n'));
 
-    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const zipBytes = await zip.generateAsync({
+      type: 'uint8array',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
     const fileName = `cierre-documental-${range.label}.zip`;
 
-    return new NextResponse(zipBuffer, {
+    return new NextResponse(zipBytes, {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
