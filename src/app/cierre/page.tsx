@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { CheckCircle2, AlertTriangle, FileWarning, PiggyBank, FolderKanban, ArrowRight, Clock3, CalendarRange } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, FileWarning, PiggyBank, FolderKanban, ArrowRight, Clock3, CalendarRange, Landmark, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 function getCurrentQuarter(date = new Date()) {
@@ -141,9 +141,13 @@ export default async function CierrePage({
     pendientesRes,
     facturasSinArchivoRes,
     emitidasPendientesRes,
+    impuestosSinDocumentoRes,
+    nominasSinDocumentoRes,
     movimientosPendientesListRes,
     facturasSinArchivoListRes,
     emitidasPendientesListRes,
+    impuestosSinDocumentoListRes,
+    nominasSinDocumentoListRes,
   ] = await Promise.all([
     supabase
       .from('movimientos')
@@ -169,6 +173,16 @@ export default async function CierrePage({
       .gte('fecha', range.from)
       .lte('fecha', range.to),
     supabase
+      .from('impuestos')
+      .select('*', { count: 'exact', head: true })
+      .eq('trimestre_fiscal', range.label)
+      .or('archivo_url.is.null,estado_documental.eq.pendiente_documento'),
+    supabase
+      .from('nominas')
+      .select('*', { count: 'exact', head: true })
+      .eq('trimestre_fiscal', range.label)
+      .or('archivo_url.is.null,estado_documental.eq.pendiente_documento'),
+    supabase
       .from('movimientos')
       .select('id, fecha, concepto, beneficiario, importe, tipo, estado_conciliacion')
       .eq('estado_conciliacion', 'Pendiente')
@@ -192,6 +206,20 @@ export default async function CierrePage({
       .lte('fecha', range.to)
       .order('fecha', { ascending: false })
       .limit(6),
+    supabase
+      .from('impuestos')
+      .select('id, concepto, tipo, periodo, importe, fecha_pago, archivo_url, estado_documental')
+      .eq('trimestre_fiscal', range.label)
+      .or('archivo_url.is.null,estado_documental.eq.pendiente_documento')
+      .order('fecha_pago', { ascending: false })
+      .limit(6),
+    supabase
+      .from('nominas')
+      .select('id, empleado, periodo, importe, fecha_pago, archivo_url, estado_documental')
+      .eq('trimestre_fiscal', range.label)
+      .or('archivo_url.is.null,estado_documental.eq.pendiente_documento')
+      .order('fecha_pago', { ascending: false })
+      .limit(6),
   ]);
 
   const movimientosTotales = movimientosRes.count || 0;
@@ -199,10 +227,14 @@ export default async function CierrePage({
   const movimientosListos = Math.max(movimientosTotales - movimientosPendientes, 0);
   const facturasSinArchivo = facturasSinArchivoRes.count || 0;
   const emitidasPendientes = emitidasPendientesRes.count || 0;
+  const impuestosSinDocumento = impuestosSinDocumentoRes.count || 0;
+  const nominasSinDocumento = nominasSinDocumentoRes.count || 0;
 
   const movimientosPendientesList = movimientosPendientesListRes.data || [];
   const facturasSinArchivoList = facturasSinArchivoListRes.data || [];
   const emitidasPendientesList = emitidasPendientesListRes.data || [];
+  const impuestosSinDocumentoList = impuestosSinDocumentoListRes.data || [];
+  const nominasSinDocumentoList = nominasSinDocumentoListRes.data || [];
 
   const bloqueos = [
     movimientosPendientes > 0
@@ -213,6 +245,12 @@ export default async function CierrePage({
       : null,
     emitidasPendientes > 0
       ? `${emitidasPendientes} factura(s) emitida(s) siguen pendientes de cobro o revisión.`
+      : null,
+    impuestosSinDocumento > 0
+      ? `${impuestosSinDocumento} impuesto(s) siguen sin soporte documental completo.`
+      : null,
+    nominasSinDocumento > 0
+      ? `${nominasSinDocumento} nómina(s) siguen sin soporte documental completo.`
       : null,
   ].filter(Boolean) as string[];
 
@@ -274,7 +312,7 @@ export default async function CierrePage({
         </form>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <MetricCard
           title="Movimientos del trimestre"
           value={movimientosTotales}
@@ -298,9 +336,23 @@ export default async function CierrePage({
         <MetricCard
           title="Facturas sin archivo"
           value={facturasSinArchivo}
-          subtitle="Documentación todavía incompleta"
+          subtitle="Documentación recibida incompleta"
           tone={facturasSinArchivo > 0 ? 'warn' : 'good'}
           icon={<FileWarning className="h-5 w-5" />}
+        />
+        <MetricCard
+          title="Impuestos sin documento"
+          value={impuestosSinDocumento}
+          subtitle="Fiscal pendiente de soporte"
+          tone={impuestosSinDocumento > 0 ? 'warn' : 'good'}
+          icon={<Landmark className="h-5 w-5" />}
+        />
+        <MetricCard
+          title="Nóminas sin documento"
+          value={nominasSinDocumento}
+          subtitle="Laboral pendiente de soporte"
+          tone={nominasSinDocumento > 0 ? 'warn' : 'good'}
+          icon={<Users className="h-5 w-5" />}
         />
       </div>
 
@@ -333,7 +385,7 @@ export default async function CierrePage({
             <p>1. Importar todos los movimientos del trimestre y eliminar duplicidades reales.</p>
             <p>2. Subir o enlazar todas las facturas recibidas pendientes.</p>
             <p>3. Resolver conciliación bancaria antes de exportar documentación a gestoría.</p>
-            <p>4. Revisar cobros emitidos y remesas TPV para cerrar la trazabilidad completa.</p>
+            <p>4. Completar soporte documental de impuestos y nóminas del trimestre.</p>
           </div>
         </div>
       </div>
@@ -422,6 +474,66 @@ export default async function CierrePage({
                     </div>
                     <span className="whitespace-nowrap text-sm font-bold text-emerald-600 dark:text-emerald-400">
                       {fmtMoney(factura.importe)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <SectionCard
+          title="Impuestos sin documento"
+          subtitle="Registros fiscales del trimestre que todavía no tienen soporte documental completo."
+          href="/impuestos"
+          hrefLabel="Ir a impuestos"
+        >
+          {impuestosSinDocumentoList.length === 0 ? (
+            <EmptyState text="No hay impuestos pendientes de documento en este trimestre." />
+          ) : (
+            <div className="space-y-3">
+              {impuestosSinDocumentoList.map((imp: any) => (
+                <div key={imp.id} className="rounded-2xl border border-gray-100 p-4 dark:border-gray-800">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">{imp.concepto || imp.tipo || 'Impuesto'}</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {imp.periodo || 'Sin período'} · {fmtDate(imp.fecha_pago)}
+                      </p>
+                    </div>
+                    <span className="whitespace-nowrap text-sm font-bold text-amber-600 dark:text-amber-400">
+                      {fmtMoney(imp.importe)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Nóminas sin documento"
+          subtitle="Registros laborales del trimestre que todavía no tienen soporte documental completo."
+          href="/nominas"
+          hrefLabel="Ir a nóminas"
+        >
+          {nominasSinDocumentoList.length === 0 ? (
+            <EmptyState text="No hay nóminas pendientes de documento en este trimestre." />
+          ) : (
+            <div className="space-y-3">
+              {nominasSinDocumentoList.map((nom: any) => (
+                <div key={nom.id} className="rounded-2xl border border-gray-100 p-4 dark:border-gray-800">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">{nom.empleado || 'Empleado sin nombre'}</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {nom.periodo || 'Sin período'} · {fmtDate(nom.fecha_pago)}
+                      </p>
+                    </div>
+                    <span className="whitespace-nowrap text-sm font-bold text-pink-600 dark:text-pink-400">
+                      {fmtMoney(nom.importe)}
                     </span>
                   </div>
                 </div>
