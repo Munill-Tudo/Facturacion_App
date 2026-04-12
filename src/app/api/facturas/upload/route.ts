@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { buscarOCrearProveedorPorNIF } from '@/app/proveedores/actions';
 import { generarRFCreditorReference } from '@/lib/normalizacion';
+import { getTrimestreFiscal } from '@/lib/trimestre';
 import OpenAI from 'openai';
 
 const SYSTEM_PROMPT = `Eres un asistente experto en contabilidad española analizando facturas recibidas por el despacho "Munill Abogados SLP" (CIF: B44650307).
@@ -46,7 +47,6 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(arrayBuffer);
     const base64PDF = buffer.toString('base64');
 
-    // 1. Extraer datos del PDF con OpenAI Responses API
     const response = await (openai as any).responses.create({
       model: 'gpt-4o',
       instructions: SYSTEM_PROMPT,
@@ -84,7 +84,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Buscar o crear proveedor
+    const fechaFinal = fecha || new Date().toISOString().split('T')[0];
+
     let tipoAsignado = null;
     let tipoGastoAsignado: string | null = null;
     let subtipoGastoAsignado: string | null = null;
@@ -104,12 +105,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Insertar en Supabase PRIMERO para obtener el ID incremental
     const { data: insertData, error: insertError } = await supabase
       .from('facturas')
       .insert([{
         numero: numero || null,
-        fecha: fecha || new Date().toISOString().split('T')[0],
+        fecha: fechaFinal,
+        trimestre_fiscal: getTrimestreFiscal(fechaFinal),
         cliente: cliente,
         nombre_proveedor: cliente,
         nif_proveedor: nif || null,
@@ -121,11 +122,13 @@ export async function POST(request: Request) {
         total_irpf: total_irpf ? parseFloat(total_irpf) : null,
         importe: parseFloat(importe),
         estado: 'Pendiente',
+        estado_documental: 'pendiente_documento',
+        origen_carga: 'pdf_ia',
         tipo: tipoAsignado || null,
         tipo_gasto: tipoGastoAsignado,
         subtipo_gasto: subtipoGastoAsignado,
         referencia_rf: generarRFCreditorReference(numero || ''),
-        archivo_url: null, // Se actualizará después con la URL de Drive
+        archivo_url: null,
       }])
       .select();
 
@@ -136,7 +139,6 @@ export async function POST(request: Request) {
 
     const facturaId: number = insertData[0]?.id;
 
-    // 4. Subir archivo a Google Drive mediante n8n (con el ID ya generado)
     let archivo_url: string | null = null;
     const n8nDriveWebhook = process.env.N8N_DRIVE_WEBHOOK_URL;
 
@@ -148,7 +150,6 @@ export async function POST(request: Request) {
 
         const driveFormData = new FormData();
         driveFormData.append('file', fileForN8n);
-        // Campos individuales accesibles en n8n como $input.item.json.body.*
         driveFormData.append('factura_id', String(facturaId));
         driveFormData.append('factura_fecha', extractedData.fecha || '');
         driveFormData.append('factura_cliente', extractedData.cliente || '');
@@ -165,9 +166,11 @@ export async function POST(request: Request) {
           const n8nData = await n8nRes.json();
           archivo_url = n8nData.archivo_url || null;
 
-          // 5. Actualizar el registro con la URL de Drive
           if (archivo_url && facturaId) {
-            await supabase.from('facturas').update({ archivo_url }).eq('id', facturaId);
+            await supabase
+              .from('facturas')
+              .update({ archivo_url, estado_documental: 'documentado' })
+              .eq('id', facturaId);
           }
         } else {
           console.error('El webhook de n8n devolvió un error:', await n8nRes.text());
