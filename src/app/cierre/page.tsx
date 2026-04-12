@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { CheckCircle2, AlertTriangle, FileWarning, PiggyBank, FolderKanban, ArrowRight, Clock3 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, FileWarning, PiggyBank, FolderKanban, ArrowRight, Clock3, CalendarRange } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 function getCurrentQuarter(date = new Date()) {
@@ -31,6 +31,18 @@ function fmtMoney(v?: number | string | null) {
     currency: 'EUR',
     minimumFractionDigits: 2,
   });
+}
+
+function parseYear(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 2020 || parsed > 2100) return fallback;
+  return parsed;
+}
+
+function parseQuarter(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 4) return fallback;
+  return parsed;
 }
 
 function MetricCard({
@@ -110,11 +122,19 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-export default async function CierrePage() {
+export default async function CierrePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ year?: string; quarter?: string }>;
+}) {
   const now = new Date();
-  const year = now.getFullYear();
-  const quarter = getCurrentQuarter(now);
+  const currentYear = now.getFullYear();
+  const currentQuarter = getCurrentQuarter(now);
+  const params = (await searchParams) || {};
+  const year = parseYear(params.year, currentYear);
+  const quarter = parseQuarter(params.quarter, currentQuarter);
   const range = getQuarterRange(year, quarter);
+  const availableYears = Array.from({ length: 5 }, (_, idx) => currentYear - 2 + idx);
 
   const [
     movimientosRes,
@@ -198,7 +218,7 @@ export default async function CierrePage() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex flex-col gap-3 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#0a0a0a]">
+      <div className="flex flex-col gap-4 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-[#0a0a0a]">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-indigo-50 p-3 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
             <FolderKanban className="h-6 w-6" />
@@ -210,6 +230,48 @@ export default async function CierrePage() {
             </p>
           </div>
         </div>
+
+        <form method="GET" className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800 dark:bg-white/5 md:flex-row md:items-end">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+            <CalendarRange className="h-4 w-4 text-indigo-500" />
+            Seleccionar trimestre
+          </div>
+          <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-3">
+            <label className="text-sm">
+              <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Año</span>
+              <select
+                name="year"
+                defaultValue={String(year)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-gray-700 dark:bg-[#0a0a0a] dark:text-white"
+              >
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Trimestre</span>
+              <select
+                name="quarter"
+                defaultValue={String(quarter)}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-gray-700 dark:bg-[#0a0a0a] dark:text-white"
+              >
+                <option value="1">1T · Enero a Marzo</option>
+                <option value="2">2T · Abril a Junio</option>
+                <option value="3">3T · Julio a Septiembre</option>
+                <option value="4">4T · Octubre a Diciembre</option>
+              </select>
+            </label>
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition-colors hover:bg-indigo-700"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -251,7 +313,7 @@ export default async function CierrePage() {
 
           <div className="mt-5 space-y-3">
             {bloqueos.length === 0 ? (
-              <EmptyState text="No se detectan bloqueos básicos para el trimestre actual." />
+              <EmptyState text="No se detectan bloqueos básicos para el trimestre seleccionado." />
             ) : (
               bloqueos.map((bloqueo, idx) => (
                 <div
@@ -284,7 +346,7 @@ export default async function CierrePage() {
           hrefLabel="Ir a conciliación"
         >
           {movimientosPendientesList.length === 0 ? (
-            <EmptyState text="No hay movimientos pendientes en el trimestre actual." />
+            <EmptyState text="No hay movimientos pendientes en el trimestre seleccionado." />
           ) : (
             <div className="space-y-3">
               {movimientosPendientesList.map((mov: any) => (
