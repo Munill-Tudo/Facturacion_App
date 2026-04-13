@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt, BarChart3, Settings, SlidersHorizontal, Landmark, X, FolderKanban } from "lucide-react";
+import { LayoutDashboard, FileText, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt, BarChart3, Settings, SlidersHorizontal, Landmark, X, FolderKanban, Inbox } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }: { isCollapsed: boolean, setIsCollapsed: (val: boolean) => void, isMobile?: boolean, onMobileClose?: () => void }) {
@@ -45,6 +45,16 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }
         )}
         {role !== 'administracion' && (
           <>
+            <NavItem
+              onClick={onMobileClose}
+              href="/bandeja"
+              icon={<Inbox className="w-5 h-5 shrink-0" />}
+              label="Bandeja operativa"
+              shortLabel="Bandeja"
+              isCollapsed={isCollapsed}
+              active={pathname?.startsWith('/bandeja')}
+              colorClass="text-fuchsia-600 hover:text-fuchsia-700 hover:bg-fuchsia-50/60 dark:text-fuchsia-400 dark:hover:bg-fuchsia-500/10"
+            />
             <NavItem
               onClick={onMobileClose}
               href="/cierre"

@@ -3,55 +3,75 @@
 import { supabase } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 import { autoConciliarPagos, autoConciliarCobros, autoEscanearNominasEImpuestos } from "@/app/movimientos/actions";
+import { createConciliacionLink, resolveIncidencias, syncIncidenciasBasicas } from "@/lib/operativa";
 
 export async function asociarPagoAFactura(movimientoId: string, facturaId: number) {
-  // 1. Obtener datos de la factura para rellenar el nombre en el movimiento
   const { data: fac } = await supabase
     .from('facturas')
     .select('nombre_proveedor, cliente, num_expediente')
     .eq('id', facturaId)
     .single();
 
+  const { data: mov } = await supabase
+    .from('movimientos')
+    .select('importe')
+    .eq('id', movimientoId)
+    .single();
+
   const clienteExp = fac ? (fac.num_expediente || fac.nombre_proveedor || fac.cliente || null) : null;
 
-  // 2. Marcar movimiento como conciliado y enlazar factura con el nombre guardado
   await supabase.from('movimientos')
-    .update({ 
-      estado_conciliacion: 'Conciliado', 
+    .update({
+      estado_conciliacion: 'Conciliado',
       factura_id: facturaId,
       cliente_expediente: clienteExp
     })
     .eq('id', movimientoId);
 
-  // 3. Marcar factura como Pagada (Conciliada)
   await supabase.from('facturas')
     .update({ estado: 'Pagada' })
     .eq('id', facturaId);
 
+  await createConciliacionLink({
+    movimientoId,
+    documentoTipo: 'factura_recibida',
+    documentoId: facturaId,
+    relacionTipo: 'manual',
+    importeAplicado: Math.abs(Number(mov?.importe || 0)),
+    origen: 'manual',
+    observacion: 'Asociación manual desde pantalla de conciliación',
+  });
+
+  await resolveIncidencias({ entidadTipo: 'movimiento', entidadId: movimientoId, tipos: ['movimiento_sin_soporte', 'fecha_dudosa'] });
+  await resolveIncidencias({ entidadTipo: 'factura_recibida', entidadId: facturaId, tipos: ['factura_sin_movimiento', 'fecha_dudosa'] });
+  await syncIncidenciasBasicas();
+
   revalidatePath('/');
   revalidatePath('/facturas');
   revalidatePath('/conciliacion');
+  revalidatePath('/bandeja');
 }
 
 export async function asignarCobroACliente(movimientoId: string, clienteExpediente: string) {
   await supabase.from('movimientos')
-    .update({ 
-      estado_conciliacion: 'Conciliado', 
-      cliente_expediente: clienteExpediente 
+    .update({
+      estado_conciliacion: 'Conciliado',
+      cliente_expediente: clienteExpediente
     })
     .eq('id', movimientoId);
 
+  await resolveIncidencias({ entidadTipo: 'movimiento', entidadId: movimientoId, tipos: ['cobro_sin_asignar', 'fecha_dudosa'] });
+  await syncIncidenciasBasicas();
+
   revalidatePath('/conciliacion');
+  revalidatePath('/bandeja');
 }
 
-/**
- * Lanza el motor de auto-conciliación sobre TODOS los pagos pendientes actuales.
- * Útil para reprocesar movimientos ya existentes sin necesidad de volver a importarlos.
- */
 export async function lanzarAutoConciliacion(): Promise<{ conciliados: number; errores: string[] }> {
   const resultado = await autoConciliarPagos();
   const resCobros = await autoConciliarCobros();
   const resNominasEImpuestos = await autoEscanearNominasEImpuestos();
+  await syncIncidenciasBasicas();
 
   revalidatePath('/');
   revalidatePath('/facturas');
@@ -60,6 +80,7 @@ export async function lanzarAutoConciliacion(): Promise<{ conciliados: number; e
   revalidatePath('/movimientos');
   revalidatePath('/nominas');
   revalidatePath('/impuestos');
+  revalidatePath('/bandeja');
 
   return {
     conciliados: resultado.conciliados + resCobros.conciliados + resNominasEImpuestos.procesados,
