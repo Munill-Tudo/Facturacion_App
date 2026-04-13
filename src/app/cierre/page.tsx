@@ -322,20 +322,20 @@ export default async function CierrePage({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link
+            <a
               href={`/api/cierre/export?year=${year}&quarter=${quarter}`}
               className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
             >
               <Download className="h-4 w-4" />
               Exportar Excel
-            </Link>
-            <Link
+            </a>
+            <a
               href={`/api/cierre/zip?year=${year}&quarter=${quarter}`}
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition-colors hover:bg-indigo-700"
             >
               <Download className="h-4 w-4" />
               ZIP documental
-            </Link>
+            </a>
           </div>
         </div>
 
