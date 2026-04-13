@@ -2,17 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt, BarChart3, Settings, SlidersHorizontal, Landmark, X } from "lucide-react";
+import { LayoutDashboard, FileText, CreditCard, PiggyBank, ArrowRightLeft, Users, Trash2, ChevronLeft, ChevronRight, Receipt, BarChart3, Settings, SlidersHorizontal, Landmark, X, FolderKanban } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }: { isCollapsed: boolean, setIsCollapsed: (val: boolean) => void, isMobile?: boolean, onMobileClose?: () => void }) {
   const pathname = usePathname();
   const { role } = useAuth();
 
-
   return (
     <aside className={`flex flex-col bg-white/60 dark:bg-black/80 backdrop-blur-xl border-r border-gray-200/50 dark:border-gray-800/50 transition-all duration-300 ${isMobile ? 'relative w-full h-full z-[60]' : `fixed inset-y-0 left-0 z-50 ${isCollapsed ? 'w-20' : 'w-64'}`}`}>
-      {/* Logo */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-gray-200/50 dark:border-gray-800/50">
         <div className={`flex items-center gap-2 overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
@@ -41,23 +39,32 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }
         )}
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto overflow-x-hidden">
         {!isCollapsed && (
           <p className="px-2 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Principal</p>
         )}
         {role !== 'administracion' && (
-          <NavItem onClick={onMobileClose} href="/" icon={<LayoutDashboard className="w-5 h-5 shrink-0" />} label="Dashboard" isCollapsed={isCollapsed} active={pathname === '/'} />
+          <>
+            <NavItem
+              onClick={onMobileClose}
+              href="/cierre"
+              icon={<FolderKanban className="w-5 h-5 shrink-0" />}
+              label="Cierre trimestral"
+              shortLabel="Cierre"
+              isCollapsed={isCollapsed}
+              active={pathname?.startsWith('/cierre')}
+              colorClass="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50/60 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+            />
+            <NavItem onClick={onMobileClose} href="/" icon={<LayoutDashboard className="w-5 h-5 shrink-0" />} label="Dashboard" isCollapsed={isCollapsed} active={pathname === '/'} />
+          </>
         )}
 
-        {/* SECTION: Ingresos */}
         {!isCollapsed && (
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Ingresos & Clientes</p>
         )}
         <NavItem onClick={onMobileClose} href="/emitidas" icon={<FileText className="w-5 h-5 shrink-0 text-emerald-500" />} label="Fc. Emitidas" shortLabel="Emitidas" isCollapsed={isCollapsed} active={pathname?.startsWith('/emitidas')} colorClass="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/60 dark:text-emerald-400 dark:hover:bg-emerald-500/10" />
         <NavItem onClick={onMobileClose} href="/clientes" icon={<Users className="w-5 h-5 shrink-0 text-emerald-500" />} label="Clientes" shortLabel="Clientes" isCollapsed={isCollapsed} active={pathname === '/clientes'} colorClass="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/60 dark:text-emerald-400 dark:hover:bg-emerald-500/10" />
 
-        {/* SECTION: Gastos & Proveedores */}
         {!isCollapsed && (
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Gastos & Proveedores</p>
         )}
@@ -67,14 +74,12 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }
         <NavItem onClick={onMobileClose} href="/suplidos" icon={<CreditCard className="w-5 h-5 shrink-0" />} label="Suplidos" shortLabel="Suplidos" isCollapsed={isCollapsed} active={pathname === '/suplidos'} />
         <NavItem onClick={onMobileClose} href="/proveedores" icon={<Settings className="w-5 h-5 shrink-0" />} label="Proveedores" shortLabel="Provee." isCollapsed={isCollapsed} active={pathname === '/proveedores'} />
 
-        {/* SECTION: Bancos y Tesorería */}
         {!isCollapsed && (
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Tesorería</p>
         )}
         <NavItem onClick={onMobileClose} href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" shortLabel="Mov.Banc" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
         <NavItem onClick={onMobileClose} href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" shortLabel="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
-        
-        {/* SECTION: Fiscal y Laboral */}
+
         {role !== 'administracion' && (
           <>
             {!isCollapsed && (
@@ -86,8 +91,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }
               colorClass="text-pink-600 hover:text-pink-700 hover:bg-pink-50/60 dark:text-pink-400 dark:hover:bg-pink-500/10" />
           </>
         )}
-        
-        {/* SECTION: Sistema */}
+
         {!isCollapsed && (
           <p className="px-2 mt-6 mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Sistema</p>
         )}
@@ -96,7 +100,6 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }
         <NavItem onClick={onMobileClose} href="/ajustes" icon={<SlidersHorizontal className="w-5 h-5 shrink-0" />} label="Ajustes" shortLabel="Ajustes" isCollapsed={isCollapsed} active={pathname === '/ajustes'} />
       </nav>
 
-      {/* User Footer */}
       <div className="p-4 border-t border-gray-200/50 dark:border-gray-800/50">
         <div className={`flex items-center gap-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-gray-800 transition-all duration-300 ${isCollapsed ? 'p-1.5 justify-center' : 'px-3 py-2'}`}>
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-400 to-indigo-500 flex items-center justify-center shrink-0">

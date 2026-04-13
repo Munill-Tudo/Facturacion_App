@@ -1,0 +1,3 @@
+Trigger preview deploy after TypeScript fix in cierre zip route.
+Branch: fix/cobros-trimestre-fiscal
+Timestamp: 2026-04-12T21:49:00Z

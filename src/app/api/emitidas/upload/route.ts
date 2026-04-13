@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { generarRFCreditorReference } from '@/lib/normalizacion';
 import { buscarOCrearClientePorNIF } from '@/app/clientes/actions';
+import { getTrimestreFiscal } from '@/lib/trimestre';
 import OpenAI from 'openai';
 
 const SYSTEM_PROMPT = `Eres un asistente experto en contabilidad española analizando facturas EMITIDAS por el despacho "Munill Abogados SLP" o "Munill-Tudó Abogados" (CIF: B44650307).
@@ -48,7 +49,6 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(arrayBuffer);
     const base64PDF = buffer.toString('base64');
 
-    // 1. Extraer datos del PDF con OpenAI Responses API
     const response = await (openai as any).responses.create({
       model: 'gpt-4o',
       instructions: SYSTEM_PROMPT,
@@ -76,15 +76,13 @@ export async function POST(request: Request) {
     const aiContent = response.output_text;
     if (!aiContent) throw new Error('No se pudo extraer el contenido con IA');
 
-    let parsedData = JSON.parse(aiContent);
-    // Asegurarnos de que tenemos un array en parsedData.facturas
+    const parsedData = JSON.parse(aiContent);
     let facturasArray: any[] = [];
     if (parsedData.facturas && Array.isArray(parsedData.facturas)) {
       facturasArray = parsedData.facturas;
     } else if (Array.isArray(parsedData)) {
       facturasArray = parsedData;
     } else {
-      // Si la IA devuelve un solo objeto suelto por error, lo forzamos a array
       facturasArray = [parsedData];
     }
 
@@ -97,79 +95,89 @@ export async function POST(request: Request) {
 
     const insertedFacturas = [];
 
-    // Procesar CADA factura encontrada
     for (const extractedData of facturasArray) {
-       const { fecha, cliente, concepto, importe, numero, nif_cliente, direccion_cliente, poblacion_cliente, provincia_cliente, cp_cliente, total_base, total_iva, total_irpf } = extractedData;
+      const {
+        fecha,
+        cliente,
+        concepto,
+        importe,
+        numero,
+        nif_cliente,
+        direccion_cliente,
+        poblacion_cliente,
+        provincia_cliente,
+        cp_cliente,
+        total_base,
+        total_iva,
+        total_irpf,
+      } = extractedData;
 
-       if (!cliente || importe === undefined || importe === null) {
-         console.warn("Se saltó una factura por faltar datos críticos", extractedData);
-         continue; // Omitir facturas mal parseadas pero seguir con las demás
-       }
+      if (!cliente || importe === undefined || importe === null) {
+        console.warn('Se saltó una factura por faltar datos críticos', extractedData);
+        continue;
+      }
 
-       // 2. Logica CRM Clientes auto-creación
-       let _clienteObj = null;
-       try {
-           if (nif_cliente || cliente) {
-               _clienteObj = await buscarOCrearClientePorNIF({
-                   nif: nif_cliente || null,
-                   nombre: cliente,
-                   direccion: direccion_cliente || null,
-                   poblacion: poblacion_cliente || null,
-                   provincia: provincia_cliente || null,
-                   cp: cp_cliente || null,
-               });
-           }
-       } catch (err) {
-           console.error("Error auto-generando cliente en CRM", err);
-       }
+      try {
+        if (nif_cliente || cliente) {
+          await buscarOCrearClientePorNIF({
+            nif: nif_cliente || null,
+            nombre: cliente,
+            direccion: direccion_cliente || null,
+            poblacion: poblacion_cliente || null,
+            provincia: provincia_cliente || null,
+            cp: cp_cliente || null,
+          });
+        }
+      } catch (err) {
+        console.error('Error auto-generando cliente en CRM', err);
+      }
 
-       // 3. Insertar en Supabase facturas_emitidas
-       const rfFactura = generarRFCreditorReference(numero || '');
-       const { data: insertData, error: insertError } = await supabase
-         .from('facturas_emitidas')
-         .insert([{
-           numero: numero || null,
-           fecha: fecha || new Date().toISOString().split('T')[0],
-           cliente: cliente,
-           nif_cliente: nif_cliente || null,
-           poblacion_cliente: poblacion_cliente || null,
-           concepto: concepto || 'Venta referenciada',
-           total_base: total_base ? parseFloat(total_base) : null,
-           total_iva: total_iva ? parseFloat(total_iva) : null,
-           total_irpf: total_irpf ? parseFloat(total_irpf) : null,
-           importe: parseFloat(importe),
-           estado: 'Pendiente',
-           referencia_rf: rfFactura,
-           archivo_url: null, // Se actualizará después en n8n
-         }])
-         .select();
+      const fechaFinal = fecha || new Date().toISOString().split('T')[0];
+      const rfFactura = generarRFCreditorReference(numero || '');
 
-       if (insertError) {
-         console.error('Error insertando factura:', insertError);
-         continue;
-       }
+      const { data: insertData, error: insertError } = await supabase
+        .from('facturas_emitidas')
+        .insert([{
+          numero: numero || null,
+          fecha: fechaFinal,
+          trimestre_fiscal: getTrimestreFiscal(fechaFinal),
+          cliente: cliente,
+          nif_cliente: nif_cliente || null,
+          poblacion_cliente: poblacion_cliente || null,
+          concepto: concepto || 'Venta referenciada',
+          total_base: total_base ? parseFloat(total_base) : null,
+          total_iva: total_iva ? parseFloat(total_iva) : null,
+          total_irpf: total_irpf ? parseFloat(total_irpf) : null,
+          importe: parseFloat(importe),
+          estado: 'Pendiente',
+          estado_documental: 'pendiente_documento',
+          origen_carga: 'pdf_ia',
+          referencia_rf: rfFactura,
+          archivo_url: null,
+        }])
+        .select();
 
-       const facturaId = insertData[0]?.id;
-       let archivo_url = null;
+      if (insertError) {
+        console.error('Error insertando factura:', insertError);
+        continue;
+      }
 
-       insertedFacturas.push({
-          ...insertData[0],
-          archivo_url
-       });
+      insertedFacturas.push({
+        ...insertData[0],
+        archivo_url: null,
+      });
     }
 
     if (insertedFacturas.length === 0) {
-        return NextResponse.json({ error: 'No se pudo insertar ninguna de las facturas leídas.' }, { status: 500 });
+      return NextResponse.json({ error: 'No se pudo insertar ninguna de las facturas leídas.' }, { status: 500 });
     }
 
-    // Devolvemos success indicando la cantidad procesada. En el frontend se mostrará como único ítem pero sabemos que cargamos múltiples
     return NextResponse.json({
       success: true,
-      factura: insertedFacturas[0], // para que el modal ponga check verde sobre el archivo (toma el primero al menos)
+      factura: insertedFacturas[0],
       extracted: parsedData,
-      count: insertedFacturas.length
+      count: insertedFacturas.length,
     });
-
   } catch (err: any) {
     console.error('Error en upload factura emitida:', err);
     return NextResponse.json(

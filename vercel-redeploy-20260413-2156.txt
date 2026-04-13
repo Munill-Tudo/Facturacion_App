@@ -1,0 +1,4 @@
+Trigger fresh Vercel deployment after cierre export body fixes.
+Branch: fix/cobros-trimestre-fiscal
+Timestamp: 2026-04-13T21:56:00Z
+Head intended: 84a9327b97cf380a5e8f8953a905b940d2247077
