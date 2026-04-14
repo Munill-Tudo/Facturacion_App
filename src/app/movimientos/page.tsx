@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { PiggyBank, RefreshCcw, Search, UploadCloud, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, Download } from 'lucide-react';
+import { PiggyBank, RefreshCcw, Search, UploadCloud, ArrowDownRight, ArrowUpRight, CheckCircle2, ChevronDown, Download, Pencil } from 'lucide-react';
 import { ImportadorCSVModal } from '@/components/movimientos/ImportadorCSVModal';
+import { EditarMovimientoModal } from '@/components/movimientos/EditarMovimientoModal';
 import { exportToXlsx } from '@/lib/exportXlsx';
 
 const fmt = (v: number) => `€ ${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2 })}`;
@@ -16,8 +17,8 @@ export default function MovimientosPage() {
   const [filterTipoMov, setFilterTipoMov] = useState<'Todos'|'Cobro'|'Pago'>('Todos');
   const [showImporter, setShowImporter] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [editingMovimiento, setEditingMovimiento] = useState<any | null>(null);
 
-  // Period filters
   const [periodMode, setPeriodMode] = useState<'libre' | 'mes' | 'trimestre' | 'año'>('libre');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -31,7 +32,7 @@ export default function MovimientosPage() {
       .from('movimientos')
       .select('*, facturas(fecha)')
       .order('fecha', { ascending: false });
-    
+
     setMovimientos(data || []);
     setLoading(false);
   };
@@ -47,6 +48,13 @@ export default function MovimientosPage() {
     setTimeout(() => setSuccessMsg(null), 8000);
   };
 
+  const handleEditSaved = async () => {
+    setEditingMovimiento(null);
+    setSuccessMsg('Movimiento actualizado y bandeja operativa sincronizada.');
+    await fetchMovimientos();
+    setTimeout(() => setSuccessMsg(null), 6000);
+  };
+
   const years = useMemo(() => {
     const ys = new Set(movimientos.map(m => m.fecha ? new Date(m.fecha).getFullYear().toString() : '').filter(Boolean));
     const arr = Array.from(ys).sort().reverse();
@@ -60,14 +68,12 @@ export default function MovimientosPage() {
       const matchSearch = !q || (m.concepto || '').toLowerCase().includes(q) || (m.cliente_expediente || '').toLowerCase().includes(q) || (m.beneficiario || '').toLowerCase().includes(q);
       const matchTipo = filterTipoMov === 'Todos' || m.tipo === filterTipoMov;
 
-      // Period filter
       const d = m.fecha ? new Date(m.fecha) : null;
       const matchPeriod = (() => {
         if (!d) return periodMode === 'libre' && !dateFrom && !dateTo;
         if (periodMode === 'mes') return d.getFullYear().toString() === selYear && (d.getMonth()+1).toString() === selMonth;
         if (periodMode === 'trimestre') return d.getFullYear().toString() === selYear && getQuarter(d).toString() === selQ;
         if (periodMode === 'año') return d.getFullYear().toString() === selYear;
-        // libre
         const from = dateFrom ? new Date(dateFrom) : null;
         const to = dateTo ? new Date(dateTo + 'T23:59:59') : null;
         if (from && d < from) return false;
@@ -79,7 +85,6 @@ export default function MovimientosPage() {
     });
   }, [movimientos, search, filterTipoMov, periodMode, dateFrom, dateTo, selYear, selMonth, selQ]);
 
-  // Counters
   const countTodos = movimientos.length;
   const countCobros = movimientos.filter(m => m.tipo === 'Cobro').length;
   const countPagos = movimientos.filter(m => m.tipo === 'Pago').length;
@@ -111,7 +116,7 @@ export default function MovimientosPage() {
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">El libro mayor de todas tus cuentas bancarias. Sube los extractos aquí.</p>
         </div>
-        
+
         <div className="shrink-0 flex items-center gap-3 flex-wrap justify-end">
           <button 
             onClick={() => setShowImporter(true)}
@@ -135,10 +140,8 @@ export default function MovimientosPage() {
         </div>
       )}
 
-      {/* Filters */}
       <div className="bg-white dark:bg-[#0a0a0a] rounded-3xl border border-gray-100 dark:border-gray-800 p-4 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Cobros / Pagos filter with counters */}
           <div className="flex bg-gray-50 dark:bg-black/50 p-1 rounded-2xl border border-gray-200 dark:border-gray-800 shrink-0">
             {([['Todos', `Todos (${countTodos})`], ['Cobro', `Cobros (${countCobros})`], ['Pago', `Pagos (${countPagos})`]] as const).map(([val, label]) => (
               <button key={val} onClick={() => setFilterTipoMov(val as any)}
@@ -148,7 +151,6 @@ export default function MovimientosPage() {
             ))}
           </div>
 
-          {/* Period mode */}
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-xs text-gray-500 font-medium">Período:</span>
             {(['libre','mes','trimestre','año'] as const).map(m => (
@@ -230,16 +232,17 @@ export default function MovimientosPage() {
                 <th className="px-6 py-4 font-semibold">Observaciones / Detalles</th>
                 <th className="px-6 py-4 font-semibold">Estado</th>
                 <th className="px-6 py-4 font-semibold text-right">Importe</th>
+                <th className="px-6 py-4 font-semibold text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800/60">
               {loading && movimientos.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">Cargando movimientos...</td>
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">Cargando movimientos...</td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     No hay movimientos todavía. ¡Importa tu primer CSV!
                   </td>
                 </tr>
@@ -255,6 +258,7 @@ export default function MovimientosPage() {
                       <div className="flex flex-col gap-0.5">
                         <span className="text-gray-900 dark:text-white font-medium text-sm">{new Date(mov.fecha).toLocaleDateString('es-ES')}</span>
                         {mov.f_valor && <span className="text-xs text-gray-400">Val: {new Date(mov.f_valor).toLocaleDateString('es-ES')}</span>}
+                        {mov.fecha_dudosa && <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Fecha dudosa</span>}
                       </div>
                     </td>
                     <td className="px-6 py-4 font-mono text-xs">
@@ -294,6 +298,15 @@ export default function MovimientosPage() {
                         {mov.tipo === 'Cobro' ? '+' : ''}{fmt(Number(mov.importe))}
                       </p>
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => setEditingMovimiento(mov)}
+                        className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Editar
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -301,7 +314,6 @@ export default function MovimientosPage() {
           </table>
         </div>
 
-        {/* VISTA MÓVIL: Tarjetas */}
         <div className="md:hidden divide-y divide-gray-50 dark:divide-gray-800/60">
           {loading && movimientos.length === 0 ? (
             <div className="p-8 text-center text-gray-500 text-sm">Cargando movimientos...</div>
@@ -314,41 +326,52 @@ export default function MovimientosPage() {
                   <div className={`w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center shadow-inner ${mov.tipo === 'Cobro' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400'}`}>
                     {mov.tipo === 'Cobro' ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
                   </div>
-                  
+
                   <div className="flex-1 min-w-0 pt-0.5">
                     <p className="font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug">{mov.concepto}</p>
                     <div className="flex flex-wrap gap-2 items-center mt-1">
                       <span className="text-gray-900 dark:text-white font-medium text-xs">{new Date(mov.fecha).toLocaleDateString('es-ES')}</span>
                       {mov.beneficiario && <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold truncate bg-indigo-50 dark:bg-indigo-500/10 px-1.5 py-0.5 rounded-md">{mov.beneficiario}</span>}
+                      {mov.fecha_dudosa && <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">Fecha dudosa</span>}
                     </div>
                   </div>
-                  
+
                   <div className="text-right shrink-0 pt-0.5">
                     <p className={`font-bold text-base tabular-nums ${mov.tipo === 'Cobro' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
                       {mov.tipo === 'Cobro' ? '+' : ''}{fmt(Number(mov.importe))}
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="ml-[52px] flex flex-col gap-2">
                   {mov.observaciones && <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 bg-gray-50 dark:bg-[#1a1a1a] p-2 rounded-xl border border-gray-100 dark:border-gray-800">{mov.observaciones}</p>}
-                  
+
                   <div className="flex flex-wrap items-center justify-between gap-2 mt-1">
                     <div className="flex items-center gap-2">
-                       {mov.estado_conciliacion === 'Conciliado' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 text-[10px] font-semibold">
-                            <CheckCircle2 className="w-3 h-3" />
-                            {mov.cliente_expediente || 'Conciliado'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400 text-[10px] font-semibold">
-                            Pendiente
-                          </span>
-                        )}
-                        {mov.referencia_rf && <span className="text-indigo-600 dark:text-indigo-400 font-mono font-bold text-[10px]">RF: {mov.referencia_rf}</span>}
-                        {mov.codigo && <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px]">Cód: {mov.codigo}</span>}
+                      {mov.estado_conciliacion === 'Conciliado' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 text-[10px] font-semibold">
+                          <CheckCircle2 className="w-3 h-3" />
+                          {mov.cliente_expediente || 'Conciliado'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-500 dark:bg-white/5 dark:text-gray-400 text-[10px] font-semibold">
+                          Pendiente
+                        </span>
+                      )}
+                      {mov.referencia_rf && <span className="text-indigo-600 dark:text-indigo-400 font-mono font-bold text-[10px]">RF: {mov.referencia_rf}</span>}
+                      {mov.codigo && <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px]">Cód: {mov.codigo}</span>}
                     </div>
                     {mov.remesa && <span className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Remesa: {mov.remesa}</span>}
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={() => setEditingMovimiento(mov)}
+                      className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Editar
+                    </button>
                   </div>
                 </div>
               </div>
@@ -361,6 +384,14 @@ export default function MovimientosPage() {
         <ImportadorCSVModal 
           onComplete={handleImportSuccess}
           onCancel={() => setShowImporter(false)}
+        />
+      )}
+
+      {editingMovimiento && (
+        <EditarMovimientoModal
+          movimiento={editingMovimiento}
+          onClose={() => setEditingMovimiento(null)}
+          onSaved={handleEditSaved}
         />
       )}
     </div>
