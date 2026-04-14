@@ -11,7 +11,14 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await syncMovimientoIncidencias(movimientoId);
-    return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+    if (!result.ok) {
+      return NextResponse.json(
+        { ok: false, error: `No se pudo sincronizar la incidencia del movimiento (${result.reason}).`, reason: result.reason },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(result, { status: 200 });
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || 'No se pudo sincronizar el movimiento' },

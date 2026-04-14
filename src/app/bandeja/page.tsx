@@ -27,6 +27,90 @@ function actionHref(item: any) {
   return '/';
 }
 
+function itemKey(item: any) {
+  return `${item.entidad_tipo}:${item.entidad_id}:${item.tipo}`;
+}
+
+function detectDate(value?: string | null) {
+  if (!value) return new Date().toISOString();
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+async function buildLiveFallbackIncidencias() {
+  const fallback: any[] = [];
+
+  const { data: movimientosDudosos } = await supabase
+    .from('movimientos')
+    .select('id, fecha, concepto, beneficiario, trimestre_fiscal, ultima_revision_at, fecha_dudosa')
+    .eq('fecha_dudosa', true)
+    .order('fecha', { ascending: true });
+
+  for (const mov of movimientosDudosos || []) {
+    const label = [mov.concepto, mov.beneficiario].filter(Boolean).join(' · ') || `Movimiento ${mov.id}`;
+    fallback.push({
+      id: `live-mov-fecha-${mov.id}`,
+      entidad_tipo: 'movimiento',
+      entidad_id: mov.id,
+      movimiento_id: mov.id,
+      tipo: 'fecha_dudosa',
+      prioridad: 'alta',
+      estado: 'abierta',
+      trimestre_fiscal: mov.trimestre_fiscal || null,
+      motivo: `${label} tiene la fecha marcada como dudosa.`,
+      fecha_detectada: detectDate(mov.ultima_revision_at || mov.fecha),
+      origen: 'live_fallback',
+    });
+  }
+
+  const { data: movimientosPendientes } = await supabase
+    .from('movimientos')
+    .select('id, tipo, fecha, concepto, beneficiario, trimestre_fiscal, ultima_revision_at, estado_conciliacion')
+    .neq('estado_conciliacion', 'Conciliado')
+    .order('fecha', { ascending: true });
+
+  for (const mov of movimientosPendientes || []) {
+    const label = [mov.concepto, mov.beneficiario].filter(Boolean).join(' · ') || `Movimiento ${mov.id}`;
+    fallback.push({
+      id: `live-mov-pend-${mov.id}`,
+      entidad_tipo: 'movimiento',
+      entidad_id: mov.id,
+      movimiento_id: mov.id,
+      tipo: mov.tipo === 'Cobro' ? 'cobro_sin_asignar' : 'movimiento_sin_soporte',
+      prioridad: mov.tipo === 'Cobro' ? 'media' : 'alta',
+      estado: 'abierta',
+      trimestre_fiscal: mov.trimestre_fiscal || null,
+      motivo: `${label} sigue pendiente de conciliación o soporte.`,
+      fecha_detectada: detectDate(mov.ultima_revision_at || mov.fecha),
+      origen: 'live_fallback',
+    });
+  }
+
+  const { data: facturasDudosas } = await supabase
+    .from('facturas')
+    .select('id, fecha, nombre_proveedor, cliente, trimestre_fiscal, fecha_dudosa')
+    .eq('fecha_dudosa', true)
+    .order('fecha', { ascending: true });
+
+  for (const factura of facturasDudosas || []) {
+    const label = factura.nombre_proveedor || factura.cliente || `Factura ${factura.id}`;
+    fallback.push({
+      id: `live-fac-fecha-${factura.id}`,
+      entidad_tipo: 'factura_recibida',
+      entidad_id: factura.id,
+      tipo: 'fecha_dudosa',
+      prioridad: 'alta',
+      estado: 'abierta',
+      trimestre_fiscal: factura.trimestre_fiscal || null,
+      motivo: `${label} tiene la fecha marcada como dudosa.`,
+      fecha_detectada: detectDate(factura.fecha),
+      origen: 'live_fallback',
+    });
+  }
+
+  return fallback;
+}
+
 export default async function BandejaPage() {
   const { data, error } = await supabase
     .from('incidencias')
@@ -53,7 +137,12 @@ export default async function BandejaPage() {
     );
   }
 
-  const incidencias = (data || []).sort((a: any, b: any) => {
+  const persisted = data || [];
+  const persistedKeys = new Set(persisted.map(itemKey));
+  const liveFallback = (await buildLiveFallbackIncidencias()).filter((item) => !persistedKeys.has(itemKey(item)));
+  const usingLiveFallback = liveFallback.length > 0;
+
+  const incidencias = [...persisted, ...liveFallback].sort((a: any, b: any) => {
     const diffPriority = priorityRank(a.prioridad) - priorityRank(b.prioridad);
     if (diffPriority !== 0) return diffPriority;
     return new Date(a.fecha_detectada).getTime() - new Date(b.fecha_detectada).getTime();
@@ -76,6 +165,12 @@ export default async function BandejaPage() {
           </div>
         </div>
       </div>
+
+      {usingLiveFallback && (
+        <div className="rounded-3xl border border-indigo-200 bg-indigo-50 p-4 text-sm font-medium text-indigo-700 shadow-sm dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300">
+          Mostrando también incidencias calculadas en vivo desde movimientos y facturas porque la tabla persistida no está devolviendo todos los casos esperados.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="rounded-3xl border border-red-200 bg-red-50 p-5 shadow-sm dark:border-red-500/20 dark:bg-red-500/10">
@@ -114,6 +209,11 @@ export default async function BandejaPage() {
                     {item.trimestre_fiscal && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600 dark:bg-white/10 dark:text-gray-400">
                         {item.trimestre_fiscal}
+                      </span>
+                    )}
+                    {item.origen === 'live_fallback' && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+                        En vivo
                       </span>
                     )}
                   </div>

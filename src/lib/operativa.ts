@@ -78,7 +78,8 @@ export async function ensureIncidencia(input: EnsureIncidenciaInput) {
     };
 
     if (existing && existing.length > 0) {
-      await supabase.from('incidencias').update(payload).eq('id', existing[0].id);
+      const { error: updateError } = await supabase.from('incidencias').update(payload).eq('id', existing[0].id);
+      if (updateError) throw updateError;
       return existing[0].id;
     }
 
@@ -193,10 +194,10 @@ export async function syncMovimientoIncidencias(movimientoId: number | string) {
     const tri = mov.trimestre_fiscal || (mov.fecha ? getTrimestreFiscal(mov.fecha) : null);
     const label = [mov.concepto, mov.beneficiario].filter(Boolean).join(' · ') || 'Movimiento bancario';
 
-    if (mov.estado_conciliacion === 'Pendiente') {
+    if (mov.estado_conciliacion !== 'Conciliado') {
       const tipoInc = mov.tipo === 'Cobro' ? 'cobro_sin_asignar' : 'movimiento_sin_soporte';
       const prioridad = mov.tipo === 'Cobro' ? 'media' : 'alta';
-      await ensureIncidencia({
+      const incidenciaId = await ensureIncidencia({
         entidadTipo: 'movimiento',
         entidadId: mov.id,
         movimientoId: mov.id,
@@ -206,6 +207,7 @@ export async function syncMovimientoIncidencias(movimientoId: number | string) {
         motivo: `${label} sigue pendiente de conciliación o soporte.`,
         sugerencia: { ruta: '/conciliacion', accion: 'resolver' },
       });
+      if (!incidenciaId) return { ok: false, reason: 'pending_incidence_not_created' };
     } else {
       await resolveIncidencias({
         entidadTipo: 'movimiento',
@@ -215,8 +217,8 @@ export async function syncMovimientoIncidencias(movimientoId: number | string) {
       });
     }
 
-    if (mov.fecha_dudosa) {
-      await ensureIncidencia({
+    if (mov.fecha_dudosa === true) {
+      const incidenciaId = await ensureIncidencia({
         entidadTipo: 'movimiento',
         entidadId: mov.id,
         movimientoId: mov.id,
@@ -226,6 +228,7 @@ export async function syncMovimientoIncidencias(movimientoId: number | string) {
         motivo: `${label} tiene la fecha marcada como dudosa.`,
         sugerencia: { ruta: '/movimientos', accion: 'corregir_fecha' },
       });
+      if (!incidenciaId) return { ok: false, reason: 'doubtful_date_incidence_not_created' };
     } else {
       await resolveIncidencias({
         entidadTipo: 'movimiento',
