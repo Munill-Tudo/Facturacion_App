@@ -45,13 +45,22 @@ function toPositiveAmount(value: number | string | null | undefined) {
   return Math.abs(Number(value || 0));
 }
 
+function normalizeNumericId(value: number | string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export async function ensureIncidencia(input: EnsureIncidenciaInput) {
   try {
+    const entityId = normalizeNumericId(input.entidadId);
+    if (entityId == null) return null;
+    const movementId = input.movimientoId != null ? normalizeNumericId(input.movimientoId) : null;
+
     const { data: existing, error: findError } = await supabase
       .from('incidencias')
       .select('id')
       .eq('entidad_tipo', input.entidadTipo)
-      .eq('entidad_id', Number(input.entidadId))
+      .eq('entidad_id', entityId)
       .eq('tipo', input.tipo)
       .in('estado', ['abierta', 'en_revision'])
       .limit(1);
@@ -59,7 +68,7 @@ export async function ensureIncidencia(input: EnsureIncidenciaInput) {
     if (findError) throw findError;
 
     const payload = {
-      movimiento_id: input.movimientoId != null ? Number(input.movimientoId) : null,
+      movimiento_id: movementId,
       prioridad: input.prioridad || 'media',
       motivo: input.motivo,
       trimestre_fiscal: input.trimestreFiscal || null,
@@ -77,7 +86,7 @@ export async function ensureIncidencia(input: EnsureIncidenciaInput) {
       .from('incidencias')
       .insert([{
         entidad_tipo: input.entidadTipo,
-        entidad_id: Number(input.entidadId),
+        entidad_id: entityId,
         tipo: input.tipo,
         ...payload,
       }])
@@ -95,6 +104,9 @@ export async function ensureIncidencia(input: EnsureIncidenciaInput) {
 
 export async function resolveIncidencias(input: ResolveIncidenciasInput) {
   try {
+    const entityId = normalizeNumericId(input.entidadId);
+    if (entityId == null) return;
+
     let query = supabase
       .from('incidencias')
       .update({
@@ -104,7 +116,7 @@ export async function resolveIncidencias(input: ResolveIncidenciasInput) {
         resolucion_nota: input.resolucionNota || null,
       })
       .eq('entidad_tipo', input.entidadTipo)
-      .eq('entidad_id', Number(input.entidadId))
+      .eq('entidad_id', entityId)
       .in('estado', ['abierta', 'en_revision']);
 
     if (input.tipos && input.tipos.length > 0) {
@@ -121,9 +133,10 @@ export async function resolveIncidencias(input: ResolveIncidenciasInput) {
 
 export async function createConciliacionLink(input: ConciliacionLinkInput) {
   try {
-    const movementId = Number(input.movimientoId);
-    const docId = Number(input.documentoId);
+    const movementId = normalizeNumericId(input.movimientoId);
+    const docId = normalizeNumericId(input.documentoId);
     const amount = Number(input.importeAplicado || 0);
+    if (movementId == null || docId == null) return null;
 
     const { data: existing, error: findError } = await supabase
       .from('conciliacion_links')
@@ -163,6 +176,73 @@ export async function createConciliacionLink(input: ConciliacionLinkInput) {
   }
 }
 
+export async function syncMovimientoIncidencias(movimientoId: number | string) {
+  try {
+    const id = normalizeNumericId(movimientoId);
+    if (id == null) return { ok: false, reason: 'invalid_id' };
+
+    const { data: mov, error } = await supabase
+      .from('movimientos')
+      .select('id, tipo, fecha, concepto, beneficiario, trimestre_fiscal, estado_conciliacion, fecha_dudosa')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    if (!mov) return { ok: false, reason: 'not_found' };
+
+    const tri = mov.trimestre_fiscal || (mov.fecha ? getTrimestreFiscal(mov.fecha) : null);
+    const label = [mov.concepto, mov.beneficiario].filter(Boolean).join(' · ') || 'Movimiento bancario';
+
+    if (mov.estado_conciliacion === 'Pendiente') {
+      const tipoInc = mov.tipo === 'Cobro' ? 'cobro_sin_asignar' : 'movimiento_sin_soporte';
+      const prioridad = mov.tipo === 'Cobro' ? 'media' : 'alta';
+      await ensureIncidencia({
+        entidadTipo: 'movimiento',
+        entidadId: mov.id,
+        movimientoId: mov.id,
+        tipo: tipoInc,
+        prioridad,
+        trimestreFiscal: tri,
+        motivo: `${label} sigue pendiente de conciliación o soporte.`,
+        sugerencia: { ruta: '/conciliacion', accion: 'resolver' },
+      });
+    } else {
+      await resolveIncidencias({
+        entidadTipo: 'movimiento',
+        entidadId: mov.id,
+        tipos: ['movimiento_sin_soporte', 'cobro_sin_asignar', 'importe_no_cuadra', 'clasificacion_dudosa'],
+        resolucionTipo: 'conciliado',
+      });
+    }
+
+    if (mov.fecha_dudosa) {
+      await ensureIncidencia({
+        entidadTipo: 'movimiento',
+        entidadId: mov.id,
+        movimientoId: mov.id,
+        tipo: 'fecha_dudosa',
+        prioridad: 'alta',
+        trimestreFiscal: tri,
+        motivo: `${label} tiene la fecha marcada como dudosa.`,
+        sugerencia: { ruta: '/movimientos', accion: 'corregir_fecha' },
+      });
+    } else {
+      await resolveIncidencias({
+        entidadTipo: 'movimiento',
+        entidadId: mov.id,
+        tipos: ['fecha_dudosa'],
+        resolucionTipo: 'fecha_validada',
+      });
+    }
+
+    return { ok: true };
+  } catch (error: any) {
+    if (isSchemaNotReady(error)) return { ok: false, reason: 'schema_not_ready' };
+    console.error('[Operativa] syncMovimientoIncidencias', error);
+    return { ok: false, reason: 'unknown_error' };
+  }
+}
+
 export async function syncIncidenciasBasicas() {
   try {
     const { data: movimientos, error: movimientosError } = await supabase
@@ -186,57 +266,14 @@ export async function syncIncidenciasBasicas() {
     }
 
     for (const mov of movimientos || []) {
-      const tri = mov.trimestre_fiscal || (mov.fecha ? getTrimestreFiscal(mov.fecha) : null);
-      const label = [mov.concepto, mov.beneficiario].filter(Boolean).join(' · ') || 'Movimiento bancario';
-
-      if (mov.estado_conciliacion === 'Pendiente') {
-        const tipoInc = mov.tipo === 'Cobro' ? 'cobro_sin_asignar' : 'movimiento_sin_soporte';
-        const prioridad = mov.tipo === 'Cobro' ? 'media' : 'alta';
-        await ensureIncidencia({
-          entidadTipo: 'movimiento',
-          entidadId: mov.id,
-          movimientoId: mov.id,
-          tipo: tipoInc,
-          prioridad,
-          trimestreFiscal: tri,
-          motivo: `${label} sigue pendiente de conciliación o soporte.`,
-          sugerencia: { ruta: '/conciliacion', accion: 'resolver' },
-        });
-      } else {
-        await resolveIncidencias({
-          entidadTipo: 'movimiento',
-          entidadId: mov.id,
-          tipos: ['movimiento_sin_soporte', 'cobro_sin_asignar', 'importe_no_cuadra', 'clasificacion_dudosa'],
-          resolucionTipo: 'conciliado',
-        });
-      }
-
-      if (mov.fecha_dudosa) {
-        await ensureIncidencia({
-          entidadTipo: 'movimiento',
-          entidadId: mov.id,
-          movimientoId: mov.id,
-          tipo: 'fecha_dudosa',
-          prioridad: 'alta',
-          trimestreFiscal: tri,
-          motivo: `${label} tiene la fecha marcada como dudosa.`,
-          sugerencia: { ruta: '/movimientos', accion: 'corregir_fecha' },
-        });
-      } else {
-        await resolveIncidencias({
-          entidadTipo: 'movimiento',
-          entidadId: mov.id,
-          tipos: ['fecha_dudosa'],
-          resolucionTipo: 'fecha_validada',
-        });
-      }
+      await syncMovimientoIncidencias(mov.id);
     }
 
     const { data: facturas, error: facturasError } = await supabase
       .from('facturas')
       .select('id, fecha, importe, estado, nombre_proveedor, cliente, fecha_dudosa');
 
-    if (facturasError) throw facturasError;
+    if (facturasError && !isSchemaNotReady(facturasError)) throw facturasError;
 
     for (const factura of facturas || []) {
       const tri = factura.fecha ? getTrimestreFiscal(factura.fecha) : null;
@@ -287,7 +324,7 @@ export async function syncIncidenciasBasicas() {
       .from('facturas_emitidas')
       .select('id, fecha, importe, estado, cliente');
 
-    if (emitidasError) throw emitidasError;
+    if (emitidasError && !isSchemaNotReady(emitidasError)) throw emitidasError;
 
     for (const factura of emitidas || []) {
       const tri = factura.fecha ? getTrimestreFiscal(factura.fecha) : null;
@@ -318,29 +355,31 @@ export async function syncIncidenciasBasicas() {
       .from('impuestos')
       .select('id, concepto, tipo, periodo, trimestre_fiscal, estado_documental, archivo_url');
 
-    if (impuestosError) throw impuestosError;
+    if (impuestosError && !isSchemaNotReady(impuestosError)) {
+      console.error('[Operativa] impuestos query', impuestosError);
+    } else {
+      for (const impuesto of impuestos || []) {
+        const pendienteDoc = impuesto.estado_documental === 'pendiente_documento' || !impuesto.archivo_url;
+        const label = impuesto.concepto || impuesto.tipo || `Impuesto ${impuesto.id}`;
 
-    for (const impuesto of impuestos || []) {
-      const pendienteDoc = impuesto.estado_documental === 'pendiente_documento' || !impuesto.archivo_url;
-      const label = impuesto.concepto || impuesto.tipo || `Impuesto ${impuesto.id}`;
-
-      if (pendienteDoc) {
-        await ensureIncidencia({
-          entidadTipo: 'impuesto',
-          entidadId: impuesto.id,
-          tipo: 'impuesto_sin_documento',
-          prioridad: 'alta',
-          trimestreFiscal: impuesto.trimestre_fiscal,
-          motivo: `${label} sigue sin soporte documental validado.`,
-          sugerencia: { ruta: '/impuestos', accion: 'subir_documento' },
-        });
-      } else {
-        await resolveIncidencias({
-          entidadTipo: 'impuesto',
-          entidadId: impuesto.id,
-          tipos: ['impuesto_sin_documento'],
-          resolucionTipo: 'documentado',
-        });
+        if (pendienteDoc) {
+          await ensureIncidencia({
+            entidadTipo: 'impuesto',
+            entidadId: impuesto.id,
+            tipo: 'impuesto_sin_documento',
+            prioridad: 'alta',
+            trimestreFiscal: impuesto.trimestre_fiscal,
+            motivo: `${label} sigue sin soporte documental validado.`,
+            sugerencia: { ruta: '/impuestos', accion: 'subir_documento' },
+          });
+        } else {
+          await resolveIncidencias({
+            entidadTipo: 'impuesto',
+            entidadId: impuesto.id,
+            tipos: ['impuesto_sin_documento'],
+            resolucionTipo: 'documentado',
+          });
+        }
       }
     }
 
@@ -348,29 +387,31 @@ export async function syncIncidenciasBasicas() {
       .from('nominas')
       .select('id, empleado, periodo, trimestre_fiscal, estado_documental, archivo_url');
 
-    if (nominasError) throw nominasError;
+    if (nominasError && !isSchemaNotReady(nominasError)) {
+      console.error('[Operativa] nominas query', nominasError);
+    } else {
+      for (const nomina of nominas || []) {
+        const pendienteDoc = nomina.estado_documental === 'pendiente_documento' || !nomina.archivo_url;
+        const label = nomina.empleado || `Nómina ${nomina.id}`;
 
-    for (const nomina of nominas || []) {
-      const pendienteDoc = nomina.estado_documental === 'pendiente_documento' || !nomina.archivo_url;
-      const label = nomina.empleado || `Nómina ${nomina.id}`;
-
-      if (pendienteDoc) {
-        await ensureIncidencia({
-          entidadTipo: 'nomina',
-          entidadId: nomina.id,
-          tipo: 'nomina_sin_documento',
-          prioridad: 'alta',
-          trimestreFiscal: nomina.trimestre_fiscal,
-          motivo: `${label} sigue sin soporte documental validado.`,
-          sugerencia: { ruta: '/nominas', accion: 'subir_documento' },
-        });
-      } else {
-        await resolveIncidencias({
-          entidadTipo: 'nomina',
-          entidadId: nomina.id,
-          tipos: ['nomina_sin_documento'],
-          resolucionTipo: 'documentada',
-        });
+        if (pendienteDoc) {
+          await ensureIncidencia({
+            entidadTipo: 'nomina',
+            entidadId: nomina.id,
+            tipo: 'nomina_sin_documento',
+            prioridad: 'alta',
+            trimestreFiscal: nomina.trimestre_fiscal,
+            motivo: `${label} sigue sin soporte documental validado.`,
+            sugerencia: { ruta: '/nominas', accion: 'subir_documento' },
+          });
+        } else {
+          await resolveIncidencias({
+            entidadTipo: 'nomina',
+            entidadId: nomina.id,
+            tipos: ['nomina_sin_documento'],
+            resolucionTipo: 'documentada',
+          });
+        }
       }
     }
   } catch (error: any) {
