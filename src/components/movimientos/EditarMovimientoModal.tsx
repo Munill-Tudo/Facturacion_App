@@ -66,7 +66,7 @@ export function EditarMovimientoModal({
 
       if (updateError) throw updateError;
 
-      await fetch('/api/operativa/sync', { method: 'POST' }).catch(() => null);
+      fetch('/api/operativa/sync', { method: 'POST', keepalive: true }).catch(() => null);
       onSaved();
     } catch (err: any) {
       setError(err?.message || 'No se pudo guardar el movimiento');
