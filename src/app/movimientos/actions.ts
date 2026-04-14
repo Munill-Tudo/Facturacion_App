@@ -8,6 +8,7 @@ import {
   generarHashTransaccion
 } from "@/lib/normalizacion";
 import { getTrimestreFiscal } from "@/lib/trimestre";
+import { syncIncidenciasBasicas } from "@/lib/operativa";
 
 export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
   if (!nuevosMovimientos.length) return { inserted: 0, duplicates: 0 };
@@ -62,9 +63,11 @@ export async function bulkInsertMovimientos(nuevosMovimientos: any[]) {
   const resAuto = await autoConciliarPagos();
   const resCobros = await autoConciliarCobros();
   const resEscaneo = await autoEscanearNominasEImpuestos();
+  await syncIncidenciasBasicas();
 
   revalidatePath('/movimientos');
   revalidatePath('/conciliacion');
+  revalidatePath('/bandeja');
 
   return { inserted: paraInsertar.length, duplicates, autoconciliados: resAuto.conciliados + resCobros.conciliados };
 }
@@ -240,6 +243,8 @@ export async function autoConciliarPagos(): Promise<{ conciliados: number; error
     errores.push(err?.message || 'Error desconocido');
   }
 
+  await syncIncidenciasBasicas();
+  revalidatePath('/bandeja');
   return { conciliados, errores };
 }
 
@@ -394,6 +399,8 @@ export async function autoEscanearNominasEImpuestos(): Promise<{ procesados: num
     errores.push(err?.message || 'Error desconocido');
   }
 
+  await syncIncidenciasBasicas();
+  revalidatePath('/bandeja');
   return { procesados, errores };
 }
 
@@ -538,5 +545,7 @@ export async function autoConciliarCobros(): Promise<{ conciliados: number; erro
     errores.push("Error cobros: " + err?.message);
   }
 
+  await syncIncidenciasBasicas();
+  revalidatePath('/bandeja');
   return { conciliados, errores };
 }
