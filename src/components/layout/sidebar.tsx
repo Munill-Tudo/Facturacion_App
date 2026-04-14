@@ -79,6 +79,16 @@ export function Sidebar({ isCollapsed, setIsCollapsed, isMobile, onMobileClose }
         )}
         <NavItem onClick={onMobileClose} href="/movimientos" icon={<PiggyBank className="w-5 h-5 shrink-0" />} label="Mov. Bancarios" shortLabel="Mov.Banc" isCollapsed={isCollapsed} active={pathname === '/movimientos'} />
         <NavItem onClick={onMobileClose} href="/conciliacion" icon={<ArrowRightLeft className="w-5 h-5 shrink-0" />} label="Conciliar" shortLabel="Conciliar" isCollapsed={isCollapsed} active={pathname === '/conciliacion'} />
+        <NavItem
+          onClick={onMobileClose}
+          href="/bandeja"
+          icon={<FolderKanban className="w-5 h-5 shrink-0" />}
+          label="Bandeja operativa"
+          shortLabel="Bandeja"
+          isCollapsed={isCollapsed}
+          active={pathname?.startsWith('/bandeja')}
+          colorClass="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50/60 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+        />
 
         {role !== 'administracion' && (
           <>
